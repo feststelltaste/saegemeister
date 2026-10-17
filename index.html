@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#111111">
+<meta name="description" content="Sägemeister – kostenloser Sägeausbeute- und Einschnitt-Rechner für Blockbandsägen mit abhakbarem Live-Ablaufplan.">
+<title>Sägemeister – Sägeausbeute &amp; Einschnittplan</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23111'/%3E%3Cpath d='M4 22h24v4H4zM6 10l4 8 4-8 4 8 4-8' stroke='%23FF5A00' stroke-width='3' fill='none'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <div class="logo"><span class="logo-mark" aria-hidden="true">▰▰</span> SÄGEMEISTER</div>
+  <div class="sub">Sägeausbeute &amp; Einschnittplan · Blockbandsäge</div>
+</header>
+
+<main class="app">
+  <!-- ================= PLANUNG ================= -->
+  <section id="view-plan" class="view">
+    <div class="card">
+      <h2>1 · Stamm</h2>
+      <div class="seg" id="modeSeg" role="group" aria-label="Maßeingabe">
+        <button type="button" data-mode="mid">Mittendurchmesser</button>
+        <button type="button" data-mode="ends">Zopf + Fuß</button>
+      </div>
+      <div id="fStamm"></div>
+    </div>
+
+    <div class="card">
+      <h2>2 · Säge &amp; Einschnitt</h2>
+      <div id="fSaw"></div>
+    </div>
+
+    <div class="card">
+      <h2>3 · Schnittmuster</h2>
+      <p class="hint">Beliebig viele Positionen. Maße in mm. <b>Seitenware</b> wird bei Modell-/4-Seiten-Einschnitt aus den Schwarten-Segmenten geschnitten.</p>
+      <div id="items"></div>
+      <button type="button" class="btn big" id="addItem">＋ Position hinzufügen</button>
+    </div>
+
+    <div class="card" id="resCard">
+      <h2>4 · Ergebnis</h2>
+      <div id="results"></div>
+    </div>
+
+    <div class="card actions">
+      <button type="button" class="btn" id="btnCopy">🔗 Link kopieren</button>
+      <button type="button" class="btn" id="btnPdf">🖨 PDF</button>
+      <p class="note">Hinweis: Schnittfugenverlust, Ertrag, Hebemaße, Schnittbilder und Ablaufplan werden aus den Eingaben berechnet (Querschnitt am Zopfende, Rundholzvolumen nach Huber). Sie müssen je nach realer Wuchsform am Stamm angepasst werden.</p>
+    </div>
+  </section>
+
+  <!-- ================= ABLAUF ================= -->
+  <section id="view-flow" class="view" hidden>
+    <div class="card">
+      <h2>Gesamt-Schnittbild</h2>
+      <div id="overview"></div>
+      <div id="legend" class="legend"></div>
+    </div>
+    <div class="card prog">
+      <div class="prog-text" id="progText"></div>
+      <div class="bar"><div id="progBar"></div></div>
+      <div class="row">
+        <button type="button" class="btn go" id="btnLive">▶ LIVE-SÄGEMODUS</button>
+        <button type="button" class="btn warn" id="btnReset">↺ Einschnitt zurücksetzen (Nächster Stamm)</button>
+      </div>
+    </div>
+    <div id="steps"></div>
+  </section>
+</main>
+
+<nav class="tabs" aria-label="Ansicht">
+  <button type="button" data-tab="plan" class="on">📐 Planung</button>
+  <button type="button" data-tab="flow">☑ Ablauf</button>
+  <button type="button" data-tab="live" class="live">▶ Live</button>
+</nav>
+
+<!-- ================= LIVE-MODUS ================= -->
+<div id="live" hidden>
+  <div class="lv-top">
+    <div class="lv-bar">
+      <div id="lvMeta"></div>
+      <button type="button" id="lvClose" aria-label="Live-Modus beenden">✕</button>
+    </div>
+    <div class="bar"><div id="lvProg"></div></div>
+    <div id="lvTitle"></div>
+    <div id="lvSub"></div>
+  </div>
+  <div id="lvGfx"></div>
+  <div class="lv-bottom">
+    <button type="button" id="lvBack">←<small>Zurück</small></button>
+    <button type="button" id="lvNext"></button>
+  </div>
+</div>
+
+<div id="toast" role="status" aria-live="polite"></div>
+<div id="printSheet"></div>
+
+<script src="calc.js"></script>
+<script src="svg.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
