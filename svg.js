@@ -122,7 +122,9 @@
       const pc = ops[j].piece;
       if (pc.length < 3) continue;
       const poly = pc.map(TP);
-      if (j === i) {
+      if (o.muted) {
+        out += '<polygon points="' + P(poly) + '" fill="#8A8A8A" fill-opacity=".05" stroke="#6a6a6a" stroke-width="1" stroke-dasharray="3 3"/>';
+      } else if (j === i) {
         out += '<polygon points="' + P(poly) + '" fill="url(#' + u + 'o)" stroke="' + ORANGE + '" stroke-width="3"/>';
       } else if (ops[j].item != null) {
         out += '<polygon points="' + P(poly) + '" fill="' + color(ops[j].item) + '" fill-opacity=".55" stroke="' + INK + '" stroke-width="1" stroke-dasharray="4 3"/>';
@@ -146,16 +148,16 @@
       }
     }
 
-    // Schnittlinien (Skala)
-    out += '<line x1="300" y1="' + r1(baseY) + '" x2="300" y2="30" stroke="' + INK + '" stroke-width="3"/>';
+    // Schnittlinien (Skala) – nur wenn es gerade um Schnitte geht
+    if (!o.muted) out += '<line x1="300" y1="' + r1(baseY) + '" x2="300" y2="30" stroke="' + INK + '" stroke-width="3"/>';
     let lastY = 1e9;
-    pass.slice().reverse().forEach(p => {
+    if (!o.muted) pass.slice().reverse().forEach(p => {
       if (p === op && !atEnd && p === ops[i]) return;
       const y = Yh(p.hExact);
       out += '<line x1="' + r1(X(minx) - 12) + '" y1="' + r1(y) + '" x2="300" y2="' + r1(y) + '" stroke="' + INK + '" stroke-width="1.5" stroke-dasharray="6 4"/>';
       if (Math.abs(y - lastY) > 13) { out += text(306, y + 4, p.h, { size: 12 }); lastY = y; }
     });
-    if (!atEnd && pass.length) {
+    if (!atEnd && pass.length && !o.muted) {
       const y = Yh(ops[i].hExact), big = ops[i].h >= 1000 ? 17 : 22;
       out += '<line x1="' + r1(X(minx) - 14) + '" y1="' + r1(y) + '" x2="302" y2="' + r1(y) + '" stroke="' + ORANGE + '" stroke-width="5"/>' +
         '<polygon points="' + P([[X(minx) - 22, y], [X(minx) - 12, y - 8], [X(minx) - 12, y + 8]]) + '" fill="' + ORANGE + '"/>' +
@@ -272,10 +274,10 @@
   function stepSvg(plan, step, o) {
     o = o || {};
     switch (step.kind) {
-      case 'setup': return crossSvg(plan, { opIdx: 0, labels: true, caption: 'Auflegen auf dem Sägebett' });
+      case 'setup': return crossSvg(plan, { opIdx: 0, labels: true, muted: true, caption: 'Auflegen auf dem Sägebett' });
       case 'level': return sideSvg(plan);
-      case 'turn': return crossSvg(plan, { opIdx: step.op, angle: step.angle, face: step.op - 1, labels: true, caption: 'Nach dem Drehen' });
-      case 'wedge': return crossSvg(plan, { opIdx: step.op, banner: 'KEIL ENTFERNEN – Fläche liegt plan', labels: true });
+      case 'turn': return crossSvg(plan, { opIdx: step.op, angle: step.angle, face: step.op - 1, labels: true, muted: true, caption: 'Nach dem Drehen' });
+      case 'wedge': return crossSvg(plan, { opIdx: step.op, banner: 'KEIL ENTFERNEN – Fläche liegt plan', labels: true, muted: true });
       case 'cut': {
         return crossSvg(plan, { opIdx: step.op, caption: 'Schnitt ' + step.cutNo + ' von ' + plan.cutTotal });
       }
