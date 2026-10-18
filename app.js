@@ -137,9 +137,34 @@
     const altBox = checkbox(box, 'Wechselschnitt (häufiger 180° wenden – bei Spannungsholz)', !!inp.alt, v => { inp.alt = v; upd(); });
     ui.alt = altBox;
   }
+  const FILL_PRESETS = [
+    { id: '40x40', name: 'Kantholz 40 × 40', t: 40, w: 40 }, { id: '60x60', name: 'Kantholz 60 × 60', t: 60, w: 60 },
+    { id: '80x80', name: 'Kantholz 80 × 80', t: 80, w: 80 }, { id: '100x100', name: 'Kantholz 100 × 100', t: 100, w: 100 },
+    { id: '24x48', name: 'Latte 24 × 48', t: 24, w: 48 }, { id: '30x50', name: 'Latte 30 × 50', t: 30, w: 50 },
+    { id: '24x100', name: 'Brett 24 × 100', t: 24, w: 100 }, { id: 'own', name: 'Eigene Maße', t: 0, w: 0 }
+  ];
+  function buildFill() {
+    const box = $('#fFill'); box.innerHTML = '';
+    if (!inp.fill || typeof inp.fill !== 'object') inp.fill = clone(S.DEFAULTS.fill);
+    const f = inp.fill;
+    const body = el('div'); body.hidden = !f.on;
+    checkbox(box, 'Mit Füllware auffüllen', !!f.on, v => { f.on = v; body.hidden = !v; upd(); });
+    const cur = FILL_PRESETS.find(p => p.t === f.t && p.w === f.w);
+    let fT, fW;
+    select(body, 'Standardware', FILL_PRESETS, cur ? cur.id : 'own', v => {
+      const p = FILL_PRESETS.find(x => x.id === v);
+      if (p.t) { f.t = p.t; f.w = p.w; fT.refresh(); fW.refresh(); upd(); }
+    });
+    fT = field(body, f, 't', { label: 'Füllware Dicke', unit: 'mm', step: 1, min: 1, max: 300, dec: 0 }, upd);
+    fW = field(body, f, 'w', { label: 'Füllware Breite', unit: 'mm', step: 5, min: 1, max: 300, dec: 0 }, upd);
+    field(body, f, 'l', { label: 'Länge (0 = Stammlänge)', unit: 'mm', step: 100, min: 0, max: 20000, dec: 0, chips: [0, 2000, 3000, 4000] }, upd);
+    body.appendChild(el('div', 'msg info fillinfo', ''));
+    box.appendChild(body);
+  }
   const T_CHIPS = [24, 30, 50, 100, 150], W_CHIPS = [80, 100, 150, 200, 250], L_CHIPS = [3000, 4000, 5000, 6000];
+  let itemCards = [];
   function buildItems() {
-    const box = $('#items'); box.innerHTML = '';
+    const box = $('#items'); box.innerHTML = ''; itemCards = [];
     inp.items.forEach((it, i) => {
       const card = el('div', 'item');
       const head = el('div', 'item-head');
@@ -160,6 +185,8 @@
       field(grid, it, 'q', { label: 'Menge', unit: 'Stk', step: 1, min: 0, max: 500, dec: 0 }, ch);
       checkbox(card, 'Seitenware (aus Schwarten-Segment)', !!it.side, v => { it.side = v; upd(); });
       refreshTitle();
+      const note = el('div', 'item-note'); note.hidden = true; card.appendChild(note);
+      itemCards.push({ card, note });
       box.appendChild(card);
     });
     if (!inp.items.length) box.appendChild(el('p', 'hint', 'Noch keine Position – bitte hinzufügen.'));
@@ -174,11 +201,42 @@
       if (Object.keys(checks).length && sig) toast('Plan geändert – Häkchen zurückgesetzt');
       checks = {}; sig = stepSig; openGfx = {};
     }
-    renderResults(); flowDirty = true;
+    renderResults(); renderStatus(); renderFillInfo(); flowDirty = true;
     if (tab === 'flow') renderFlow();
     save();
   }
   const m3 = v => fmt(v, 3) + ' m³';
+  // Statusleiste oben + Hinweise an den Positionen: sofort sichtbar, wenn etwas nicht passt
+  function renderStatus() {
+    const st = $('#status');
+    let bad = new Set();
+    if (!plan.valid) {
+      st.className = 'err'; st.textContent = '⛔ ' + plan.warnings[0].msg; itemCards.forEach(c => { c.card.classList.remove('bad'); c.note.hidden = true; }); return;
+    }
+    const errs = plan.warnings.filter(w => w.lvl === 'err'), warns = plan.warnings.filter(w => w.lvl === 'warn');
+    errs.forEach(w => { if (w.item != null) bad.add(w.item); });
+    plan.warnings.filter(w => w.lvl === 'warn' && w.item != null).forEach(w => bad.add(w.item));
+    itemCards.forEach((c, i) => {
+      const isBad = bad.has(i);
+      c.card.classList.toggle('bad', isBad); c.note.hidden = !isBad;
+      if (isBad) {
+        const mx = S.maxQty(inp, i);
+        c.note.innerHTML = plan.warnings.filter(w => w.item === i).map(w => esc(w.msg)).join('<br>') + '<br><b>Max. möglich: ' + mx + ' Stück</b>';
+      }
+    });
+    if (errs.length) { st.className = 'err'; st.textContent = '⛔ Passt nicht: ' + errs[0].msg + (errs[0].item != null ? ' Max. möglich: ' + S.maxQty(inp, errs[0].item) + ' Stück.' : '') + (errs.length > 1 ? ' (+' + (errs.length - 1) + ' weitere)' : ''); st.dataset.bad = bad.size ? [...bad][0] : ''; }
+    else if (warns.length) { st.className = 'warn'; st.textContent = '⚠️ ' + warns[0].msg; st.dataset.bad = bad.size ? [...bad][0] : ''; }
+    else { st.className = 'ok'; st.textContent = '✓ Passt – Ausbeute ' + fmt(plan.res.yield, 1) + ' %'; st.dataset.bad = ''; }
+  }
+  function renderFillInfo() {
+    const n = $('.fillinfo'); if (!n) return;
+    const f = plan.fill;
+    if (!inp.fill.on || !f) { n.hidden = true; return; }
+    n.hidden = false;
+    if (f.baseErr) n.textContent = 'Erst das Schnittmuster korrigieren – dann wird aufgefüllt.';
+    else if (!f.n) n.textContent = 'Kein Platz für ' + f.t + '×' + f.w + ' mm Füllware (bei dieser Strategie/diesem Muster).';
+    else n.textContent = '✓ Es passen noch ' + f.n + ' Stück ' + f.t + '×' + f.w + ' mm → Ausbeute ' + fmt(f.baseYield, 1) + ' % → ' + fmt(plan.res.yield, 1) + ' %';
+  }
   function renderResults() {
     const box = $('#results');
     if (!plan.valid) { box.innerHTML = plan.warnings.map(w => '<div class="msg err">' + esc(w.msg) + '</div>').join(''); return; }
@@ -226,7 +284,7 @@
   }
   function renderLegend() {
     let h = '';
-    plan.items.forEach(i => { h += '<span><span class="swatch" style="background:' + G.colorOf(i.idx) + '"></span>Pos. ' + (i.idx + 1) + ': ' + i.t + '×' + i.w + ' · ' + i.q + ' Stk' + (i.side ? ' (Seite)' : '') + '</span>'; });
+    plan.items.forEach(i => { h += '<span><span class="swatch" style="background:' + G.colorOf(i.idx) + '"></span>' + (i.fill ? 'Füllware' : 'Pos. ' + (i.idx + 1)) + ': ' + i.t + '×' + i.w + ' · ' + i.q + ' Stk' + (i.side && !i.fill ? ' (Seite)' : '') + '</span>'; });
     $('#legend').innerHTML = h + '<span><span class="swatch" style="background:#B9AE98"></span>Schwarte/Rest</span>';
   }
   function renderFlow() {
@@ -340,7 +398,7 @@
       '<tr><td>Ausbeute</td><td><b>' + fmt(r.yield, 1) + ' %</b></td><td>Schnittfuge/Sägemehl</td><td>' + m3(r.vKerf) + '</td></tr>' +
       '<tr><td>Sonstiger Verlust</td><td>' + m3(r.vOther) + '</td><td>Hölzer gesamt</td><td>' + r.pieces + ' Stk</td></tr></table>';
     h += '<h2>Schnittmuster</h2><table><tr><th>Pos.</th><th>Dicke</th><th>Breite</th><th>Länge</th><th>Menge</th><th>Typ</th></tr>';
-    plan.items.forEach(i => { h += '<tr><td>' + (i.idx + 1) + '</td><td>' + i.t + '</td><td>' + i.w + '</td><td>' + i.l + '</td><td>' + i.q + '</td><td>' + (i.side ? 'Seitenware' : 'Hauptware') + '</td></tr>'; });
+    plan.items.forEach(i => { h += '<tr><td>' + (i.fill ? 'Füll' : i.idx + 1) + '</td><td>' + i.t + '</td><td>' + i.w + '</td><td>' + i.l + '</td><td>' + i.q + '</td><td>' + (i.side ? 'Seitenware' : 'Hauptware') + '</td></tr>'; });
     h += '</table>';
     plan.warnings.filter(w => w.lvl !== 'info').forEach(w => { h += '<p>⚠ ' + esc(w.msg) + '</p>'; });
     h += '<h2>Gesamt-Schnittbild</h2><div class="ov">' + G.overviewSvg(plan, {}) + '</div>';
@@ -359,7 +417,7 @@
   /* ---------- Start ---------- */
   function init() {
     load();
-    buildStamm(); buildSaw(); buildItems();
+    buildStamm(); buildSaw(); buildItems(); buildFill();
     document.querySelectorAll('#modeSeg button').forEach(b => b.addEventListener('click', () => { inp.mode = b.dataset.mode; syncVis(); upd(); }));
     $('#addItem').addEventListener('click', () => {
       const last = inp.items[inp.items.length - 1];
@@ -372,6 +430,10 @@
     $('#btnPdf').addEventListener('click', () => { if (buildPrint()) window.print(); else toast('Bitte zuerst gültige Stammmaße eingeben'); });
     window.addEventListener('beforeprint', buildPrint);
     $('#btnLive').addEventListener('click', openLive);
+    $('#status').addEventListener('click', () => {
+      const b = $('#status').dataset.bad, c = b !== '' && b != null ? itemCards[Number(b)] : null;
+      (c ? c.card : $('#resCard')).scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
     $('#btnReset').addEventListener('click', resetAll);
     $('#lvClose').addEventListener('click', closeLive);
     $('#lvNext').addEventListener('click', liveNext);

@@ -43,4 +43,21 @@ t('Wechselschnitt dreht öfter', () => {
   const p = S.buildPlan(inp);
   assert.ok(p.steps.filter(s => s.kind === 'turn').length >= 3);
 });
+t('Füllware füllt auf und erhöht Ausbeute', () => {
+  const inp = clone(S.DEFAULTS); inp.fill = { on: true, t: 60, w: 60, l: 0 };
+  const p = S.buildPlan(inp);
+  const b = S.buildPlan(Object.assign(clone(S.DEFAULTS), { fill: { on: false } }));
+  console.log('   fill', p.fill.n, b.res.yield.toFixed(1), '->', p.res.yield.toFixed(1));
+  assert.ok(p.fill.n > 0); assert.ok(p.res.yield > b.res.yield);
+  assert.ok(!p.warnings.some(w => w.lvl === 'err'));
+});
+t('Zu viele Bretter -> Fehler mit Position, maxQty', () => {
+  const inp = clone(S.DEFAULTS); inp.strategy = 'scharf'; inp.items = [{ t: 50, w: 100, l: 4000, q: 20, side: false }];
+  const p = S.buildPlan(inp);
+  assert.ok(p.warnings.some(w => w.lvl === 'err'));
+  const m = S.maxQty(inp, 0);
+  console.log('   max', m);
+  assert.ok(m > 0 && m < 20);
+  inp.items[0].q = m; assert.ok(!S.buildPlan(inp).warnings.some(w => w.lvl === 'err'));
+});
 process.exit(fails ? 1 : 0);

@@ -18,6 +18,7 @@
 <main class="app">
   <!-- ================= PLANUNG ================= -->
   <section id="view-plan" class="view">
+    <div id="status" role="status" aria-live="polite"></div>
     <div class="card">
       <h2>1 · Stamm</h2>
       <div class="seg" id="modeSeg" role="group" aria-label="Maßeingabe">
@@ -37,6 +38,12 @@
       <p class="hint">Beliebig viele Positionen. Maße in mm. <b>Seitenware</b> wird bei Modell-/4-Seiten-Einschnitt aus den Schwarten-Segmenten geschnitten.</p>
       <div id="items"></div>
       <button type="button" class="btn big" id="addItem">＋ Position hinzufügen</button>
+    </div>
+
+    <div class="card" id="fillCard">
+      <h2>3b · Auffüllen</h2>
+      <p class="hint">Restholz in den Schwarten-Segmenten mit Standardware (z. B. Kantholz 60×60) auffüllen – für bessere Ausbeute. Die Menge wird automatisch berechnet.</p>
+      <div id="fFill"></div>
     </div>
 
     <div class="card" id="resCard">

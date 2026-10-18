@@ -52,6 +52,7 @@
     mode: 'mid', dmid: 40, taper: 1, dtop: 38, dbutt: 42, len: 4,
     form: 'gerade', pfeil: 2, species: 'fichte', saw: 'duenn', kerf: 2.0,
     strategy: 'auto', level: 'A', alt: false,
+    fill: { on: false, t: 60, w: 60, l: 0 },
     items: [
       { t: 50, w: 200, l: 4000, q: 2, side: false },
       { t: 24, w: 150, l: 4000, q: 4, side: false },
@@ -139,7 +140,7 @@
     const out = [];
     (inp.items || []).forEach((it, idx) => {
       const t = num(it.t, 0), w = num(it.w, 0), l = num(it.l, 0), q = Math.floor(num(it.q, 0));
-      if (t > 0 && w > 0 && q > 0) out.push({ idx, t, w, l, q, side: !!it.side });
+      if (t > 0 && w > 0 && q > 0) out.push({ idx, t, w, l, q, side: !!it.side, fill: !!it.fill });
     });
     return out;
   }
@@ -235,7 +236,7 @@
     return { res, rest: rem };
   }
 
-  function buildPlan(inp) {
+  function buildCore(inp) {
     const warn = [];
     const g = geometry(inp);
     const plan = { inp, g, warnings: warn, ops: [], steps: [], valid: false };
@@ -294,21 +295,21 @@
       if (op.item == null) return;
       const v = [-op.n[1], op.n[0]], have = extentAlong(chk.res[i].piece, v);
       if (have < op.w - 0.5) {
-        warn.push({ lvl: 'err', msg: 'Position ' + (op.item + 1) + ' (' + op.t + '×' + op.w + ' mm) passt am Zopfende nicht in den Stamm – dort sind nur ca. ' + Math.floor(have) + ' mm Breite möglich.' });
+        warn.push({ lvl: 'err', item: op.item, msg: 'Position ' + (op.item + 1) + ' (' + op.t + '×' + op.w + ' mm) passt am Zopfende nicht in den Stamm – dort sind nur ca. ' + Math.floor(have) + ' mm Breite möglich.' });
       }
     });
     if (pl.rest && pl.rest.type === 'main') {
       const b = pl.rest.b, lastN = pl.ops.length ? pl.ops[pl.ops.length - 1].n : [0, 1];
       const v = [-lastN[1], lastN[0]], have = extentAlong(chk.rest, v);
       if (have < b.w - 0.5 && pl.ops.length) {
-        warn.push({ lvl: 'err', msg: 'Position ' + (b.idx + 1) + ' (' + b.t + '×' + b.w + ' mm) – das letzte Teil passt am Zopfende nicht in den Stamm (nur ca. ' + Math.floor(have) + ' mm Breite).' });
+        warn.push({ lvl: 'err', item: b.idx, msg: 'Position ' + (b.idx + 1) + ' (' + b.t + '×' + b.w + ' mm) – das letzte Teil passt am Zopfende nicht in den Stamm (nur ca. ' + Math.floor(have) + ' mm Breite).' });
       }
     }
     if (pl.sideLeft.length) {
       const cnt = {};
       pl.sideLeft.forEach(s => { cnt[s.idx] = (cnt[s.idx] || 0) + 1; });
       Object.keys(cnt).forEach(i => {
-        warn.push({ lvl: 'warn', msg: 'Seitenware Position ' + (Number(i) + 1) + ': ' + cnt[i] + ' Stück lassen sich nicht aus den Schwarten-Segmenten schneiden – Menge reduzieren oder als Hauptware führen.' });
+        warn.push({ lvl: 'warn', item: Number(i), msg: 'Seitenware Position ' + (Number(i) + 1) + ': ' + cnt[i] + ' Stück lassen sich nicht aus den Schwarten-Segmenten schneiden – Menge reduzieren oder als Hauptware führen.' });
       });
     }
     if (pl.ops.some(o => o.pieceArea < 1 && o.kind !== 'slab')) {
@@ -321,7 +322,7 @@
     }
     if (pl.ops.some(o => o.h < 0)) warn.push({ lvl: 'err', msg: 'Ein Schnitt läge unterhalb des Sägebetts (Skalenwert < 0).' });
     items.forEach(it => {
-      if (it.l > g.L + 1) warn.push({ lvl: 'warn', msg: 'Position ' + (it.idx + 1) + ': Länge ' + it.l + ' mm ist größer als die Stammlänge (' + fmt(g.L, 0) + ' mm).' });
+      if (it.l > g.L + 1) warn.push({ lvl: 'warn', item: it.idx, msg: 'Position ' + (it.idx + 1) + ': Länge ' + it.l + ' mm ist größer als die Stammlänge (' + fmt(g.L, 0) + ' mm).' });
       if (it.l <= 0) warn.push({ lvl: 'warn', msg: 'Position ' + (it.idx + 1) + ': Länge fehlt – Volumen wird mit 0 gerechnet.' });
     });
     if (inp.level === 'C' && g.delta > 10) warn.push({ lvl: 'warn', msg: 'Stamm ist konisch (' + fmt(g.delta / 10, 1) + ' cm Differenz) – ohne Höhenausgleich werden die Bretter am Zopf schmaler/keilig.' });
@@ -348,16 +349,56 @@
     else if (g.vRound > 0 && vSawn / g.vRound > 0.7) warn.push({ lvl: 'warn', msg: 'Ausbeute über 70 % – bei Blockbandsägen kaum erreichbar, bitte Maße prüfen.' });
     if (!items.length) warn.push({ lvl: 'info', msg: 'Noch keine Position im Schnittmuster – bitte Schnitthölzer hinzufügen.' });
 
+    const seen = new Set();
+    plan.warnings = warn.filter(w => (k => !seen.has(k) && seen.add(k))(w.item != null ? 'i' + w.item + w.lvl : w.msg));
     plan.valid = true;
     plan.steps = buildSteps(plan);
     plan.cutTotal = plan.steps.filter(s => s.kind === 'cut').length;
     return plan;
   }
 
+  /* ---------- Füllware & Mengenprüfung ---------- */
+  function withItems(inp, extra) { const c = JSON.parse(JSON.stringify(inp)); c.items = c.items.concat(extra); return c; }
+
+  // Wie viele Stück Füllware (z. B. Kantholz 60×60) passen noch zusätzlich in den Stamm?
+  function buildPlan(inp) {
+    const base = buildCore(inp);
+    const f = inp.fill;
+    if (!f || !f.on || !base.valid || !(f.t > 0 && f.w > 0)) return base;
+    const fidx = inp.items.length;
+    const l = f.l > 0 ? f.l : Math.floor(base.g.L);
+    const mk = q => ({ t: f.t, w: f.w, l, q, side: true, fill: true });
+    const baseErr = base.warnings.some(w => w.lvl === 'err');
+    let n = 0, best = null;
+    if (!baseErr) {
+      for (let q = 1; q <= 80; q++) {
+        const p = buildCore(withItems(inp, [mk(q)]));
+        if (p.warnings.some(w => w.lvl === 'err' || (w.item === fidx && w.lvl !== 'info'))) break;
+        n = q; best = p;
+      }
+    }
+    const out = best || base;
+    out.fill = { n, t: f.t, w: f.w, l, idx: fidx, baseYield: base.res ? base.res.yield : 0, baseErr };
+    return out;
+  }
+
+  // Größte Menge von Position idx, die (bei sonst gleichem Muster) noch passt
+  function maxQty(inp, idx) {
+    const it = inp.items[idx];
+    if (!it) return 0;
+    for (let q = Math.floor(num(it.q, 0)); q >= 0; q--) {
+      const c = JSON.parse(JSON.stringify(inp)); c.items[idx].q = q; c.fill = { on: false };
+      const p = buildCore(c);
+      if (!p.warnings.some(w => w.lvl === 'err' && w.item === idx) && !p.warnings.some(w => w.lvl === 'err' && w.item == null && /Volumen|Stapel|Modellbreite|Kantholz|außerhalb|unterhalb|übersteigen/.test(w.msg))) return q;
+    }
+    return 0;
+  }
+
   /* ---------- Arbeitsschritte ---------- */
   function opLabel(plan, op) {
     if (op.kind === 'slab') return op.face && !op.flat ? 'Schwarte abnehmen' : (op.face ? 'Schwarte abnehmen → Seite ' + op.face + ' flach' : 'Schwarte abnehmen');
-    const nm = op.kind === 'side' ? 'Seitenware' : kindName(op.t, op.w);
+    const src = plan.items.find(i => i.idx === op.item);
+    const nm = src && src.fill ? 'Füllware ' + kindName(op.t, op.w) : op.kind === 'side' ? 'Seitenware' : kindName(op.t, op.w);
     return nm + ' ' + op.t + ' × ' + op.w + ' mm abnehmen';
   }
 
@@ -438,7 +479,7 @@
 
   const api = {
     SPECIES, SAWS, STRATEGIES, LEVELS, DEFAULTS,
-    geometry, buildPlan, cleanItems, resolveStrategy, speciesOf, kindName, fmt, num,
+    geometry, buildPlan, maxQty, cleanItems, resolveStrategy, speciesOf, kindName, fmt, num,
     circlePoly, clipHalf, area, centroid, minDot, extentAlong, rot
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

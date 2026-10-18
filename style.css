@@ -67,6 +67,16 @@ select, .sel { width: 100%; min-height: var(--tap); font-size: 18px; font-weight
 .item-grid { display: grid; grid-template-columns: 1fr; gap: 0; }
 .swatch { display: inline-block; width: 18px; height: 18px; border: 2px solid var(--ink); vertical-align: -2px; margin-right: 6px; }
 
+/* ---------- Status-Anzeige oben ---------- */
+#status { position: sticky; top: 0; z-index: 15; margin: 0 -16px 14px; padding: 10px 16px; font-weight: 900; font-size: 16px; border-bottom: 4px solid var(--ink); cursor: pointer; }
+#status.ok { background: #CDEFD7; color: #064d20; border-color: var(--ok); }
+#status.warn { background: #FFE7A8; color: #5c3b00; border-color: var(--warn); }
+#status.err { background: var(--err); color: #fff; border-color: #fff; box-shadow: 0 3px 0 var(--ink); }
+.item.bad { border-color: var(--err); background: #FDE7EA; }
+.item-note { margin-top: 10px; font-size: 15px; font-weight: 800; color: #7a0016; }
+.item-note b { background: var(--err); color: #fff; padding: 1px 8px; border-radius: 6px; }
+.fillinfo { margin-top: 4px; }
+
 /* ---------- Ergebnis ---------- */
 .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .tile { border: 3px solid var(--ink); border-radius: 8px; padding: 8px 10px; background: #fff; }
