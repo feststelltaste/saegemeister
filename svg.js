@@ -117,12 +117,23 @@
     out += '<circle cx="' + r1(O[0]) + '" cy="' + r1(O[1]) + '" r="' + r1(r) + '" fill="none" stroke="' + BARK + '" stroke-width="7"/></g>';
     out += '<circle cx="' + r1(O[0]) + '" cy="' + r1(O[1]) + '" r="4" fill="' + BARK + '"/>';
 
+    if (!atEnd && plan.rest && plan.rest.type === 'slab' && plan.leftover.length > 2) {
+      const lp = plan.leftover.map(TP);
+      out += '<polygon points="' + P(lp) + '" fill="url(#' + u + 'h)" fill-opacity=".85" stroke="#555" stroke-width="1.2"/>';
+      const lb = bboxCenter(lp);
+      if (lb.w > 60 && lb.h > 12) out += text(lb.cx, lb.cy + 4, 'Schwarte', { size: 10, anchor: 'middle', halo: true, fill: '#444' });
+    }
     // Folge-Stücke (Vorschau) + aktuelles Stück
     for (let j = i; j < ops.length; j++) {
       const pc = ops[j].piece;
       if (pc.length < 3) continue;
       const poly = pc.map(TP);
-      if (o.muted) {
+      const isSlab = ops[j].kind === 'slab';
+      if (isSlab && !(j === i && !o.muted)) {
+        out += '<polygon points="' + P(poly) + '" fill="url(#' + u + 'h)" fill-opacity=".85" stroke="#555" stroke-width="1.2"/>';
+        const b = bboxCenter(poly);
+        if (b.w > 60 && b.h > 12) out += text(b.cx, b.cy + 4, 'Schwarte', { size: 10, anchor: 'middle', halo: true, fill: '#444' });
+      } else if (o.muted) {
         out += '<polygon points="' + P(poly) + '" fill="#8A8A8A" fill-opacity=".05" stroke="#6a6a6a" stroke-width="1" stroke-dasharray="3 3"/>';
       } else if (j === i) {
         out += '<polygon points="' + P(poly) + '" fill="url(#' + u + 'o)" stroke="' + ORANGE + '" stroke-width="3"/>';
@@ -173,7 +184,7 @@
       const sP = pt(a0), eP = pt(a1), tg = [Math.sin(a1), Math.cos(a1)], nr = [Math.cos(a1), -Math.sin(a1)];
       out += '<path d="M' + r1(sP[0]) + ' ' + r1(sP[1]) + ' A' + r1(rr) + ' ' + r1(rr) + ' 0 0 1 ' + r1(eP[0]) + ' ' + r1(eP[1]) + '" fill="none" stroke="' + ORANGE + '" stroke-width="7" stroke-linecap="round"/>';
       out += '<polygon points="' + P([[eP[0] + tg[0] * 16, eP[1] + tg[1] * 16], [eP[0] + nr[0] * 11, eP[1] + nr[1] * 11], [eP[0] - nr[0] * 11, eP[1] - nr[1] * 11]]) + '" fill="' + ORANGE + '"/>';
-      out += text(O[0], O[1] - rr + 44, o.angle + '°', { size: 36, anchor: 'middle', halo: true, fill: '#B83C00' });
+      out += text(Math.min(330, O[0] + rr * 0.95), Math.max(60, O[1] - rr * 0.75), o.angle + '°', { size: 34, anchor: 'middle', halo: true, fill: '#B83C00' });
     }
 
     if (o.banner) {
