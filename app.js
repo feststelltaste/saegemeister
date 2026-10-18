@@ -429,6 +429,16 @@
     $('#btnCopy').addEventListener('click', copyLink);
     $('#btnPdf').addEventListener('click', () => { if (buildPrint()) window.print(); else toast('Bitte zuerst gültige Stammmaße eingeben'); });
     window.addEventListener('beforeprint', buildPrint);
+    const applyTheme = t => {
+      document.documentElement.dataset.theme = t;
+      $('#themeBtn').textContent = t === 'dark' ? '☀' : '🌙';
+      const m = document.querySelector('meta[name=theme-color]'); if (m) m.content = t === 'dark' ? '#16181A' : '#111111';
+    };
+    applyTheme(document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light');
+    $('#themeBtn').addEventListener('click', () => {
+      const t = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+      applyTheme(t); try { localStorage.setItem('saegemeister.theme', t); } catch (e) { /* egal */ }
+    });
     $('#btnLive').addEventListener('click', openLive);
     $('#status').addEventListener('click', () => {
       const b = $('#status').dataset.bad, c = b !== '' && b != null ? itemCards[Number(b)] : null;
