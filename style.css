@@ -65,8 +65,8 @@ button { cursor: pointer; touch-action: manipulation; }
 
 /* ---------- Kopf ---------- */
 .top { background: var(--dark); color: #fff; padding: 12px 16px 10px; border-bottom: 6px solid var(--orange); }
-.logo { font-size: 28px; font-weight: 900; letter-spacing: .06em; }
-.logo-mark { color: var(--orange); letter-spacing: -.1em; margin-right: 4px; }
+.logo { display: flex; align-items: center; gap: 12px; font-size: 28px; font-weight: 900; letter-spacing: .06em; }
+.logo-svg { flex: none; border: 2px solid #fff; border-radius: 10px; }
 .sub { font-size: 14px; color: #ddd; font-weight: 700; }
 
 .app { max-width: 720px; margin: 0 auto; padding: 14px 16px 0; }
