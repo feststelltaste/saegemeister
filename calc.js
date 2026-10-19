@@ -333,6 +333,7 @@
       op.hExact = op.d - s.m + (lifted ? liftSel : 0);
       op.h = Math.round(op.hExact);
       op.pieceArea = area(s.piece);
+      if (op.item != null && op.kind !== 'fill') op.wFull = Math.round(extentAlong(s.piece, [-op.n[1], op.n[0]]));
     });
     plan.ops = pl.ops;
     plan.leftover = sim.rest;
@@ -451,7 +452,8 @@
     if (op.kind === 'slab') return op.face && !op.flat ? 'Schwarte abnehmen' : (op.face ? 'Schwarte abnehmen → Seite ' + op.face + ' flach' : 'Schwarte abnehmen');
     if (op.kind === 'fill') return 'Füllware-Brett ' + op.t + ' × ' + op.w + ' mm abnehmen → später ' + op.fillN + '× ' + op.fillP + '×' + op.t + ' auftrennen';
     const nm = op.kind === 'side' ? 'Seitenware' : kindName(op.t, op.w);
-    return nm + ' ' + op.t + ' × ' + op.w + ' mm abnehmen';
+    const edge = op.wFull - op.w > 2 ? ' (unbesäumt ca. ' + op.wFull + ' mm breit, später auf ' + op.w + ' besäumen)' : '';
+    return nm + ' ' + op.t + ' × ' + op.w + ' mm abnehmen' + edge;
   }
 
   function buildSteps(plan) {

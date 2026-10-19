@@ -218,7 +218,7 @@
       '<p class="note">' + plan.ops.length + ' Schnitte · ' + plan.steps.filter(s => s.kind === 'turn').length + '× drehen · ' + esc(plan.stratName.replace(/ \(.*/, '')) + (plan.stackMode === 'half' ? ' · erst bis zur Mitte, dann wenden' : '') + '</p>';
     let h = '';
     plan.items.forEach(i => { h += '<span><span class="swatch" style="background:' + G.colorOf(i.idx) + '"></span>' + (i.fill ? 'Latten' : 'Pos. ' + (i.idx + 1)) + ': ' + i.t + '×' + i.w + ' · ' + i.q + ' Stk</span>'; });
-    $('#planLegend').innerHTML = h + '<span><span class="swatch" style="background:#B9AE98"></span>Schwarte/Rest</span>';
+    $('#planLegend').innerHTML = h + '<span><span class="swatch" style="background:#B9AE98"></span>Schwarte / Besäumstreifen (schraffiert)</span>';
   }
   // Statusleiste oben + Hinweise an den Positionen: sofort sichtbar, wenn etwas nicht passt
   function renderStatus() {
@@ -302,7 +302,7 @@
   function renderLegend() {
     let h = '';
     plan.items.forEach(i => { h += '<span><span class="swatch" style="background:' + G.colorOf(i.idx) + '"></span>' + (i.fill ? 'Füllware' : 'Pos. ' + (i.idx + 1)) + ': ' + i.t + '×' + i.w + ' · ' + i.q + ' Stk' + (i.side && !i.fill ? ' (Seite)' : '') + '</span>'; });
-    $('#legend').innerHTML = h + '<span><span class="swatch" style="background:#B9AE98"></span>Schwarte/Rest</span>';
+    $('#legend').innerHTML = h + '<span><span class="swatch" style="background:#B9AE98"></span>Schwarte / Besäumstreifen (schraffiert)</span>';
   }
   function renderFlow() {
     flowDirty = false;

@@ -42,6 +42,15 @@
     }
     return out;
   }
+  // Brett mit Soll-Breite w: Kern (Sollbreite) + Besäumstreifen links/rechts (wird später abgesägt)
+  function edgeSplit(poly, op) {
+    if (!op || op.item == null || op.kind === 'fill' || !(op.wFull - op.w > 2)) return null;
+    const v = [-op.n[1], op.n[0]], h = op.w / 2;
+    return {
+      core: S.clipHalf(S.clipHalf(poly, v[0], v[1], -h, true), v[0], v[1], h, false),
+      sides: [S.clipHalf(poly, v[0], v[1], -h, false), S.clipHalf(poly, v[0], v[1], h, true)]
+    };
+  }
   function xAt(poly, y) { // [min,max] x der Fläche auf Höhe y (nur Bildschirm-Koordinaten, y nach oben)
     let lo = Infinity, hi = -Infinity;
     for (let i = 0; i < poly.length; i++) {
@@ -155,7 +164,9 @@
         if (b.w > 30 && b.h > 11) out += text(b.cx, b.cy + 4, ops[j].fillN + '×', { size: 11, anchor: 'middle', halo: true });
       } else if (ops[j].item != null) {
         out += '<polygon points="' + P(poly) + '" fill="' + color(ops[j].item) + '" fill-opacity=".55" stroke="' + INK + '" stroke-width="1" stroke-dasharray="4 3"/>';
-        const b = bboxCenter(poly);
+        const eg = edgeSplit(pc, ops[j]);
+        if (eg) eg.sides.forEach(sp => { if (sp.length > 2) out += '<polygon points="' + P(sp.map(TP)) + '" fill="url(#' + u + 'h)" fill-opacity=".9" stroke="#555" stroke-width="1"/>'; });
+        const b = bboxCenter(eg && eg.core.length > 2 ? eg.core.map(TP) : poly);
         if (b.w > 40 && b.h > 11) out += text(b.cx, b.cy + 4, ops[j].t + '×' + ops[j].w, { size: 10, anchor: 'middle', halo: true });
       } else {
         out += '<polygon points="' + P(poly) + '" fill="none" stroke="#777" stroke-width="1" stroke-dasharray="2 3"/>';
@@ -231,7 +242,9 @@
       if (isDone) svg += '<polygon points="' + P(q) + '" fill="url(#' + u + 'h)" fill-opacity=".8" stroke="#666" stroke-width="1"/>';
       else if (!op || op.item == null) svg += '<polygon points="' + P(q) + '" fill="url(#' + u + 'h)" fill-opacity=".45"/>';
       if (isCur) svg += '<polygon points="' + P(q) + '" fill="none" stroke="' + ORANGE + '" stroke-width="5" stroke-linejoin="round"/>';
-      const b = bboxCenter(q);
+      const eg = isDone ? null : edgeSplit(poly, op);
+      if (eg) eg.sides.forEach(sp => { if (sp.length > 2) svg += '<polygon points="' + P(sp.map(T)) + '" fill="url(#' + u + 'h)" fill-opacity=".9" stroke="#555" stroke-width="1"/>'; });
+      const b = bboxCenter(eg && eg.core.length > 2 ? eg.core.map(T) : q);
       if (op && op.kind === 'fill' && b.w > 22 && b.h > 9) svg += text(b.cx, b.cy + 4, op.fillN + '×', { size: 11, anchor: 'middle', halo: true });
       else if (op && op.item != null && b.w > 38 && b.h > 11) svg += text(b.cx, b.cy + 4, op.t + '×' + op.w, { size: 10, anchor: 'middle', halo: true });
       if (isDone && b.w > 14 && b.h > 10) svg += text(b.cx, b.cy + 5, '✓', { size: 16, anchor: 'middle', halo: true, fill: '#006B2D' });
