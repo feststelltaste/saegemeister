@@ -60,4 +60,18 @@ t('Zu viele Bretter -> Fehler mit Position, maxQty', () => {
   assert.ok(m > 0 && m < 20);
   inp.items[0].q = m; assert.ok(!S.buildPlan(inp).warnings.some(w => w.lvl === 'err'));
 });
+t('Scharfschnitt: bis Mitte, dann einmal wenden (Stamm unten noch rund)', () => {
+  const inp = clone(S.DEFAULTS); inp.strategy = 'scharf'; inp.alt = false; inp.items = [{ t: 30, w: 100, l: 4000, q: 6, side: false }];
+  const p = S.buildPlan(inp);
+  const turns = p.steps.filter(s => s.kind === 'turn');
+  assert.strictEqual(turns.length, 1); assert.strictEqual(turns[0].angle, 180);
+  const idx = p.steps.findIndex(s => s.kind === 'turn');
+  const before = p.steps.slice(0, idx).filter(s => s.kind === 'cut').length;
+  assert.ok(before >= 3 && before <= 5, 'Schnitte vor dem Wenden: ' + before);
+  assert.ok(p.steps.some(s => s.kind === 'wedge'));
+});
+t('4-Seiten: Kantholzstapel läuft durch (flach auf Bett)', () => {
+  const inp = clone(S.DEFAULTS); inp.strategy = 'vier'; inp.alt = false; inp.items = [{ t: 50, w: 100, l: 4000, q: 4, side: false }];
+  const p = S.buildPlan(inp); assert.strictEqual(p.stackMode, 'seq');
+});
 process.exit(fails ? 1 : 0);

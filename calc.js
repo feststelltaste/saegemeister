@@ -158,6 +158,9 @@
 
   /* ---------- Schnittplan ---------- */
   function planOps(strat, mains, sides, k, rFit, alt) {
+    // Stapel-Reihenfolge: 'alt' = Wechselschnitt (Spannung), 'half' = bis zur Mitte, dann wenden (Stamm liegt unten noch rund),
+    // 'seq' = durchgehend von oben (Kantholz liegt flach und rechtwinklig auf dem Bett)
+    const stackMode = alt ? 'alt' : (strat === 'vier' ? 'seq' : 'half');
     const ops = [];
     const sideQ = sides.slice();
     let faceNo = 0;
@@ -192,8 +195,10 @@
       mains.forEach(b => { pcs.push({ type: 'main', lo: hi - b.t, hi, b }); hi = hi - b.t - k; });
       if (withSlabs) pcs.push({ type: 'slab', lo: -Infinity, hi: -Hm / 2 - k });
       let i = 0, j = pcs.length - 1, sign = 1, chunk = 0;
+      const firstHalf = Math.ceil((pcs.length - 1) / 2);
       while (i < j) {
-        if (alt && chunk >= 2) { sign = -sign; chunk = 0; }
+        if (stackMode === 'alt' && chunk >= 2) { sign = -sign; chunk = 0; }
+        if (stackMode === 'half' && sign > 0 && chunk >= firstHalf) { sign = -1; chunk = 0; }
         let p, n, d;
         if (sign > 0) { p = pcs[i++]; n = [u[0], u[1]]; d = p.lo - k; }
         else { p = pcs[j--]; n = [-u[0], -u[1]]; d = -p.hi - k; }
@@ -219,7 +224,7 @@
       face([-1, 0], Hm / 2, Wm);
       rest = stack([-1, 0], false);
     }
-    return { ops, rest, sideLeft: sideQ, Hm, Wm };
+    return { ops, rest, sideLeft: sideQ, Hm, Wm, stackMode };
   }
 
   function simulate(ops, R, k) {
@@ -269,6 +274,7 @@
 
     const pl = planOps(strat, mains, sides, k, rEff, alt);
     plan.model = { Hm: pl.Hm, Wm: pl.Wm };
+    plan.stackMode = pl.stackMode;
     const liftSel = g.lift[inp.level] != null ? g.lift[inp.level] : g.lift.A;
     plan.liftSel = liftSel;
 
@@ -442,6 +448,7 @@
           text: (angle === 180
             ? 'Stamm um 180° wenden: die frisch gesägte Fläche liegt jetzt unten plan auf den Querträgern.'
             : 'Stamm um 90° drehen: die flache Seite muss exakt im rechten Winkel an den hochgeklappten Seitenstützen anliegen.') +
+            (!op.face && !prev.face && angle === 180 && plan.stackMode === 'half' ? ' Warum jetzt: unten liegt der Stamm noch rund – deshalb nur bis etwa zur Mitte sägen, dann auf die flache Seite wenden und den Rest stabil und klemmbar zu Ende sägen.' : '') +
             ' Spannklaue unterhalb der nächsten Schnittlinie neu ansetzen.' +
             (tension ? ' ⚡ ' + sp.name + ' ist spannungsreich: häufiger wenden (Wechselschnitt), damit das Sägeblatt nicht klemmt.' : '')
         });
@@ -464,8 +471,9 @@
       push({
         kind: 'cut', phase, op: i, cutNo, h: op.h,
         title: 'Schnitt ' + cutNo + ': Skala auf ' + op.h + ' mm stellen',
-        sub: opLabel(plan, op),
-        text: opLabel(plan, op) + ' – Skala ' + op.h + ' mm ab Sägebett (Schnittfuge ' + fmt(plan.k, 1) + ' mm eingerechnet).'
+        sub: opLabel(plan, op) + (op.h <= 120 ? ' · Klaue tief!' : ''),
+        text: opLabel(plan, op) + ' – Skala ' + op.h + ' mm ab Sägebett (Schnittfuge ' + fmt(plan.k, 1) + ' mm eingerechnet).' +
+          (op.h <= 120 ? ' Rest wird leichter und kippt/federt leicht: Spannklaue tief setzen und den Stamm bei den letzten Schnitten nicht loslassen.' : '')
       });
       prev = op;
     });
