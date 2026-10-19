@@ -545,6 +545,7 @@
         title: 'Schnitt ' + cutNo + ': Skala auf ' + op.h + ' mm stellen',
         sub: opLabel(plan, op) + (op.h <= 120 ? ' · Klaue tief!' : ''),
         text: opLabel(plan, op) + ' – Skala ' + op.h + ' mm ab Sägebett (Schnittfuge ' + fmt(plan.k, 1) + ' mm eingerechnet).' +
+          (op.kind === 'slab' || (op.t && op.t <= 30) ? ' Achtung: Schwarten und dünne Anschnitte können nach unten in den Freispalt rutschen und das Band einklemmen – festhalten bzw. sofort entnehmen.' : '') +
           (op.h <= 120 ? ' Rest wird leichter und kippt/federt leicht: Spannklaue tief setzen und den Stamm bei den letzten Schnitten nicht loslassen.' : '')
       });
       prev = op;
