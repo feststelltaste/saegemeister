@@ -111,6 +111,7 @@
     ui.dtop = field(box, inp, 'dtop', { label: 'Zopfdurchmesser (dünnes Ende)', unit: 'cm', step: 1, min: 5, max: 200, dec: 1 }, upd);
     ui.dbutt = field(box, inp, 'dbutt', { label: 'Fußdurchmesser (dickes Ende)', unit: 'cm', step: 1, min: 5, max: 250, dec: 1 }, upd);
     ui.len = field(box, inp, 'len', { label: 'Stammlänge', unit: 'm', step: 0.1, min: 0.5, max: 20, dec: 2, chips: [3, 4, 5, 6] }, upd);
+    ui.bark = field(box, inp, 'bark', { label: 'Rinde je Seite (Abzug)', unit: 'mm', step: 1, min: 0, max: 40, dec: 0, chips: [0, 5, 10, 15, 20] }, upd);
     const f = select(box, 'Wuchsform', [{ id: 'gerade', name: 'Gerade' }, { id: 'krumm', name: 'Leicht krumm / abholzig gebogen' }], inp.form, v => { inp.form = v; syncVis(); upd(); });
     ui.form = f;
     ui.pfeil = field(box, inp, 'pfeil', { label: 'Krümmung (Pfeilhöhe)', unit: 'cm', step: 1, min: 0, max: 30, dec: 0, chips: [1, 2, 4, 6] }, upd);
@@ -138,25 +139,29 @@
     ui.alt = altBox;
   }
   const FILL_PRESETS = [
-    { id: '40x40', name: 'Kantholz 40 × 40', t: 40, w: 40 }, { id: '60x60', name: 'Kantholz 60 × 60', t: 60, w: 60 },
-    { id: '80x80', name: 'Kantholz 80 × 80', t: 80, w: 80 }, { id: '100x100', name: 'Kantholz 100 × 100', t: 100, w: 100 },
-    { id: '24x48', name: 'Latte 24 × 48', t: 24, w: 48 }, { id: '30x50', name: 'Latte 30 × 50', t: 30, w: 50 },
-    { id: '24x100', name: 'Brett 24 × 100', t: 24, w: 100 }, { id: 'own', name: 'Eigene Maße', t: 0, w: 0 }
+    { id: 'auto', name: 'Automatisch: meiste Dachlatten (24×48 / 30×50 / 40×60)' },
+    { id: '24x48', name: 'Dachlatte 24 × 48', t: 24, w: 48 }, { id: '30x50', name: 'Dachlatte 30 × 50', t: 30, w: 50 },
+    { id: '40x60', name: 'Dachlatte 40 × 60', t: 40, w: 60 }, { id: '60x60', name: 'Kantholz 60 × 60', t: 60, w: 60 },
+    { id: '80x80', name: 'Kantholz 80 × 80', t: 80, w: 80 }, { id: 'own', name: 'Eigene Maße', t: 0, w: 0 }
   ];
   function buildFill() {
     const box = $('#fFill'); box.innerHTML = '';
     if (!inp.fill || typeof inp.fill !== 'object') inp.fill = clone(S.DEFAULTS.fill);
     const f = inp.fill;
     const body = el('div'); body.hidden = !f.on;
-    checkbox(box, 'Mit Füllware auffüllen', !!f.on, v => { f.on = v; body.hidden = !v; upd(); });
-    const cur = FILL_PRESETS.find(p => p.t === f.t && p.w === f.w);
+    checkbox(box, 'Mit Dachlatten / Füllware auffüllen', !!f.on, v => { f.on = v; body.hidden = !v; upd(); });
+    const cur = f.auto ? 'auto' : (FILL_PRESETS.find(p => p.t === f.t && p.w === f.w) || { id: 'own' }).id;
     let fT, fW;
-    select(body, 'Standardware', FILL_PRESETS, cur ? cur.id : 'own', v => {
+    const dims = el('div'); dims.hidden = !!f.auto;
+    select(body, 'Was soll aufgefüllt werden?', FILL_PRESETS, cur, v => {
       const p = FILL_PRESETS.find(x => x.id === v);
-      if (p.t) { f.t = p.t; f.w = p.w; fT.refresh(); fW.refresh(); upd(); }
+      f.auto = v === 'auto'; dims.hidden = f.auto;
+      if (p.t) { f.t = p.t; f.w = p.w; fT.refresh(); fW.refresh(); }
+      upd();
     });
-    fT = field(body, f, 't', { label: 'Füllware Dicke', unit: 'mm', step: 1, min: 1, max: 300, dec: 0 }, upd);
-    fW = field(body, f, 'w', { label: 'Füllware Breite', unit: 'mm', step: 5, min: 1, max: 300, dec: 0 }, upd);
+    body.appendChild(dims);
+    fT = field(dims, f, 't', { label: 'Füllware Dicke', unit: 'mm', step: 1, min: 1, max: 300, dec: 0 }, upd);
+    fW = field(dims, f, 'w', { label: 'Füllware Breite', unit: 'mm', step: 1, min: 1, max: 300, dec: 0 }, upd);
     field(body, f, 'l', { label: 'Länge (0 = Stammlänge)', unit: 'mm', step: 100, min: 0, max: 20000, dec: 0, chips: [0, 2000, 3000, 4000] }, upd);
     body.appendChild(el('div', 'msg info fillinfo', ''));
     box.appendChild(body);
@@ -201,11 +206,20 @@
       if (Object.keys(checks).length && sig) toast('Plan geändert – Häkchen zurückgesetzt');
       checks = {}; sig = stepSig; openGfx = {};
     }
-    renderResults(); renderStatus(); renderFillInfo(); flowDirty = true;
+    renderResults(); renderStatus(); renderFillInfo(); renderPlanGfx(); flowDirty = true;
     if (tab === 'flow') renderFlow();
     save();
   }
   const m3 = v => fmt(v, 3) + ' m³';
+  function renderPlanGfx() {
+    const box = $('#planGfx'); if (!box) return;
+    if (!plan.valid) { box.innerHTML = ''; return; }
+    box.innerHTML = G.overviewSvg(plan, {}) + '<div class="legend" id="planLegend"></div>' +
+      '<p class="note">' + plan.ops.length + ' Schnitte · ' + plan.steps.filter(s => s.kind === 'turn').length + '× drehen · ' + esc(plan.stratName.replace(/ \(.*/, '')) + (plan.stackMode === 'half' ? ' · erst bis zur Mitte, dann wenden' : '') + '</p>';
+    let h = '';
+    plan.items.forEach(i => { h += '<span><span class="swatch" style="background:' + G.colorOf(i.idx) + '"></span>' + (i.fill ? 'Latten' : 'Pos. ' + (i.idx + 1)) + ': ' + i.t + '×' + i.w + ' · ' + i.q + ' Stk</span>'; });
+    $('#planLegend').innerHTML = h + '<span><span class="swatch" style="background:#B9AE98"></span>Schwarte/Rest</span>';
+  }
   // Statusleiste oben + Hinweise an den Positionen: sofort sichtbar, wenn etwas nicht passt
   function renderStatus() {
     const st = $('#status');
@@ -233,9 +247,11 @@
     const f = plan.fill;
     if (!inp.fill.on || !f) { n.hidden = true; return; }
     n.hidden = false;
-    if (f.baseErr) n.textContent = 'Erst das Schnittmuster korrigieren – dann wird aufgefüllt.';
-    else if (!f.n) n.textContent = 'Kein Platz für ' + f.t + '×' + f.w + ' mm Füllware (bei dieser Strategie/diesem Muster).';
-    else n.textContent = '✓ Es passen noch ' + f.n + ' Stück ' + f.t + '×' + f.w + ' mm → Ausbeute ' + fmt(f.baseYield, 1) + ' % → ' + fmt(plan.res.yield, 1) + ' %';
+    if (f.baseErr) { n.textContent = 'Erst das Schnittmuster korrigieren – dann wird aufgefüllt.'; return; }
+    if (!f.n) { n.textContent = 'Kein Platz für ' + f.t + '×' + f.w + ' mm im Rest des Stamms.'; return; }
+    let t = '✓ ' + f.n + ' Stück ' + f.t + '×' + f.w + ' mm' + (f.auto ? ' (beste Wahl)' : '') + ' · Ausbeute ' + fmt(f.baseYield, 1) + ' % → ' + fmt(plan.res.yield, 1) + ' %';
+    if (f.auto && f.tried) t += '\nVergleich: ' + f.tried.map(x => x.t + '×' + x.w + ' = ' + x.n + ' Stk').join(' · ');
+    n.textContent = t; n.style.whiteSpace = 'pre-line';
   }
   function renderResults() {
     const box = $('#results');
@@ -247,6 +263,7 @@
     h += '<div class="tile"><small>Schnittholz</small><b>' + fmt(r.vSawn, 3) + '</b><em>m³</em></div>';
     h += '<div class="tile"><small>Schnittfuge / Sägemehl</small><b>' + fmt(r.vKerf, 3) + '</b><em>m³ · ' + fmt(r.kerfShare, 1) + ' %</em></div>';
     h += '<div class="tile"><small>Sonstiger Verlust</small><b>' + fmt(r.vOther, 3) + '</b><em>m³ · ' + fmt(r.otherShare, 1) + ' %</em></div>';
+    if (plan.fill && plan.fill.n) h += '<div class="tile main"><small>Dachlatten / Füllware</small><b>' + plan.fill.n + ' Stk</b><em> ' + plan.fill.t + '×' + plan.fill.w + ' mm · ' + fmt(plan.fill.n * plan.fill.l / 1000, 0) + ' lfm</em></div>';
     h += '<div class="tile"><small>Hölzer gesamt</small><b>' + r.pieces + '</b><em>Stück · ' + r.cuts + ' Schnitte</em></div>';
     h += '<div class="tile"><small>Höhenausgleich (Zopf)</small><b>' + fmt(r.liftSel, 0) + ' mm</b><em>A ' + fmt(r.lift.A, 0) + ' · B ' + fmt(r.lift.B, 0) + ' mm</em></div>';
     h += '</div>';

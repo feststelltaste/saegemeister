@@ -50,9 +50,9 @@
 
   const DEFAULTS = {
     mode: 'mid', dmid: 40, taper: 1, dtop: 38, dbutt: 42, len: 4,
-    form: 'gerade', pfeil: 2, species: 'fichte', saw: 'duenn', kerf: 2.0,
+    form: 'gerade', pfeil: 2, bark: 10, species: 'fichte', saw: 'duenn', kerf: 2.0,
     strategy: 'auto', level: 'A', alt: false,
-    fill: { on: false, t: 60, w: 60, l: 0 },
+    fill: { on: true, auto: true, t: 30, w: 50, l: 0 },
     items: [
       { t: 50, w: 200, l: 4000, q: 2, side: false },
       { t: 24, w: 150, l: 4000, q: 4, side: false },
@@ -157,7 +157,7 @@
   }
 
   /* ---------- Schnittplan ---------- */
-  function planOps(strat, mains, sides, k, rFit, alt) {
+  function planOps(strat, mains, sides, k, rFit, alt, fillSpec, fillIdx) {
     // Stapel-Reihenfolge: 'alt' = Wechselschnitt (Spannung), 'half' = bis zur Mitte, dann wenden (Stamm liegt unten noch rund),
     // 'seq' = durchgehend von oben (Kantholz liegt flach und rechtwinklig auf dem Bett)
     const stackMode = alt ? 'alt' : (strat === 'vier' ? 'seq' : 'half');
@@ -167,7 +167,30 @@
     const Hm = mains.reduce((s, b) => s + b.t, 0) + Math.max(0, mains.length - 1) * k;
     const Wm = mains.reduce((m, b) => Math.max(m, b.w), 0);
 
-    // Fläche anschneiden: optional Seitenware, dann Schwarte/Flächenschnitt bei Abstand dFlat
+    // Füllware (z. B. Dachlatten): Schichten ab lo nach außen, je Schicht so viele Latten nebeneinander wie in die Breite passen
+    // (das Brett wird später aufgetrennt). Beide Lagen (hochkant/flach) werden probiert, die mit mehr Stück je mm Dicke gewinnt.
+    function fillLayers(lo, capW) {
+      const out = [];
+      if (!fillSpec) return out;
+      while (out.length < 40) {
+        let best = null;
+        [[fillSpec.t, fillSpec.w], [fillSpec.w, fillSpec.t]].forEach(tp => {
+          const T = tp[0], P = tp[1], hi = lo + T;
+          if (hi >= rFit - 1) return;
+          const chord = Math.min(capW, 2 * Math.sqrt(Math.max(0, rFit * rFit - hi * hi)));
+          const n = Math.floor((chord + k) / (P + k));
+          if (n < 1) return;
+          const score = n / (T + k);
+          if (!best || score > best.score) best = { T, P, k: n, lo, hi, score };
+        });
+        if (!best) break;
+        out.push(best); lo = best.hi + k;
+      }
+      return out;
+    }
+    const fillOp = L => ({ kind: 'fill', item: fillIdx, t: L.T, w: L.k * L.P + (L.k - 1) * k, fillN: L.k, fillP: L.P });
+
+    // Fläche anschneiden: optional Seitenware/Füllware, dann Schwarte/Flächenschnitt bei Abstand dFlat
     function face(n, dFlat, capW) {
       faceNo++;
       const placed = [];
@@ -175,25 +198,36 @@
       for (let i = 0; i < sideQ.length;) {
         const s = sideQ[i], hi = lo + s.t;
         const chord = Math.min(capW, 2 * Math.sqrt(Math.max(0, rFit * rFit - hi * hi)));
-        if (hi < rFit && s.w <= chord + 0.01) { placed.push({ s, lo, hi }); lo = hi + k; sideQ.splice(i, 1); } else i++;
+        if (hi < rFit && s.w <= chord + 0.01) { placed.push({ lo, hi, kind: 'side', item: s.idx, t: s.t, w: s.w }); lo = hi + k; sideQ.splice(i, 1); } else i++;
       }
+      fillLayers(lo, capW).forEach(L => placed.push(Object.assign({ lo: L.lo, hi: L.hi }, fillOp(L))));
       const topFace = placed.length ? placed[placed.length - 1].hi : dFlat;
       if (!placed.length || topFace + k < rFit - 2) {
         ops.push({ n, d: topFace, kind: 'slab', face: faceNo, flat: !placed.length });
       }
       for (let i = placed.length - 1; i >= 0; i--) {
         const p = placed[i];
-        ops.push({ n, d: p.lo - k, kind: 'side', face: faceNo, flat: i === 0, item: p.s.idx, t: p.s.t, w: p.s.w });
+        ops.push({ n, d: p.lo - k, face: faceNo, flat: i === 0, kind: p.kind, item: p.item, t: p.t, w: p.w, fillN: p.fillN, fillP: p.fillP });
       }
     }
 
     // Stapel auftrennen entlang Achse u (Brett 1 liegt oben = größte Koordinate)
-    function stack(u, withSlabs) {
+    function stack(u, withSlabs, capW) {
       const pcs = [];
-      if (withSlabs) pcs.push({ type: 'slab', lo: Hm / 2 + k, hi: Infinity });
+      let layers = [];
+      if (withSlabs) {
+        layers = fillLayers(Hm / 2 + k, capW);
+        const topLo = layers.length ? layers[layers.length - 1].hi + k : Hm / 2 + k;
+        pcs.push({ type: 'slab', lo: topLo, hi: Infinity });
+        for (let i = layers.length - 1; i >= 0; i--) pcs.push({ type: 'fill', lo: layers[i].lo, hi: layers[i].hi, L: layers[i] });
+      }
       let hi = Hm / 2;
       mains.forEach(b => { pcs.push({ type: 'main', lo: hi - b.t, hi, b }); hi = hi - b.t - k; });
-      if (withSlabs) pcs.push({ type: 'slab', lo: -Infinity, hi: -Hm / 2 - k });
+      if (withSlabs) {
+        layers.forEach(L => pcs.push({ type: 'fill', lo: -L.hi, hi: -L.lo, L }));
+        const botHi = layers.length ? -layers[layers.length - 1].hi - k : -Hm / 2 - k;
+        pcs.push({ type: 'slab', lo: -Infinity, hi: botHi });
+      }
       let i = 0, j = pcs.length - 1, sign = 1, chunk = 0;
       const firstHalf = Math.ceil((pcs.length - 1) / 2);
       while (i < j) {
@@ -204,6 +238,7 @@
         else { p = pcs[j--]; n = [-u[0], -u[1]]; d = -p.hi - k; }
         const op = { n, d, kind: p.type };
         if (p.type === 'main') { op.item = p.b.idx; op.t = p.b.t; op.w = p.b.w; }
+        if (p.type === 'fill') Object.assign(op, fillOp(p.L));
         ops.push(op);
         chunk++;
       }
@@ -212,17 +247,17 @@
 
     let rest = null;
     if (strat === 'scharf') {
-      rest = stack([0, 1], true);
+      rest = stack([0, 1], true, Infinity);
     } else if (strat === 'prisma') {
       face([0, 1], Wm / 2, Infinity);
       face([0, -1], Wm / 2, Infinity);
-      rest = stack([1, 0], true);
+      rest = stack([1, 0], true, Wm);
     } else { // vier
       face([0, 1], Wm / 2, Infinity);
       face([0, -1], Wm / 2, Infinity);
       face([1, 0], Hm / 2, Wm);
       face([-1, 0], Hm / 2, Wm);
-      rest = stack([-1, 0], false);
+      rest = stack([-1, 0], false, Wm);
     }
     return { ops, rest, sideLeft: sideQ, Hm, Wm, stackMode };
   }
@@ -241,7 +276,7 @@
     return { res, rest: rem };
   }
 
-  function buildCore(inp) {
+  function buildCore(inp, fillIn) {
     const warn = [];
     const g = geometry(inp);
     const plan = { inp, g, warnings: warn, ops: [], steps: [], valid: false };
@@ -268,11 +303,19 @@
 
     const r = g.dtop / 2;
     const pfeil = inp.form === 'krumm' ? Math.max(0, num(inp.pfeil, 0)) * 10 : 0;
-    const rEff = Math.max(1, (g.dtop - pfeil) / 2);
+    const bark = Math.max(0, num(inp.bark, 0));
+    const rEff = Math.max(1, (g.dtop - pfeil) / 2 - bark);
     plan.rEff = rEff;
     const alt = !!inp.alt;
 
-    const pl = planOps(strat, mains, sides, k, rEff, alt);
+    const fillIdx = inp.items.length;
+    const pl = planOps(strat, mains, sides, k, rEff, alt, fillIn, fillIdx);
+    const fillN = pl.ops.reduce((a, o) => a + (o.fillN || 0), 0) + (pl.rest && pl.rest.type === 'fill' ? pl.rest.L.k : 0);
+    if (fillIn && fillN > 0) {
+      items.push({ idx: fillIdx, t: fillIn.t, w: fillIn.w, l: fillIn.l, q: fillN, side: true, fill: true });
+      plan.items = items;
+    }
+    plan.fill = fillIn ? { n: fillN, t: fillIn.t, w: fillIn.w, l: fillIn.l, idx: fillIdx, layers: pl.ops.filter(o => o.fillN).length } : null;
     plan.model = { Hm: pl.Hm, Wm: pl.Wm };
     plan.stackMode = pl.stackMode;
     const liftSel = g.lift[inp.level] != null ? g.lift[inp.level] : g.lift.A;
@@ -333,6 +376,7 @@
     });
     if (inp.level === 'C' && g.delta > 10) warn.push({ lvl: 'warn', msg: 'Stamm ist konisch (' + fmt(g.delta / 10, 1) + ' cm Differenz) – ohne Höhenausgleich werden die Bretter am Zopf schmaler/keilig.' });
     if (inp.level === 'B') warn.push({ lvl: 'info', msg: 'Rindenparalleler Schnitt: Zopf wird um den vollen Durchmesserunterschied angehoben. Plan und Grafik gelten für den Zopfquerschnitt.' });
+    if (bark > 0 && plan.items.length) warn.push({ lvl: 'info', msg: 'Rindenabzug ' + fmt(bark, 0) + ' mm je Seite: Das Schnittmuster muss in den Holzkörper ohne Rinde passen (' + fmt(2 * rEff, 0) + ' mm nutzbar am Zopf).' });
     if (pfeil > 0) warn.push({ lvl: 'info', msg: 'Krummer Stamm: Nutzdurchmesser am Zopf um ' + fmt(pfeil / 10, 1) + ' cm reduziert gerechnet. Bogen seitlich bzw. nach oben auflegen.' });
 
     // Volumen
@@ -366,25 +410,27 @@
   /* ---------- Füllware & Mengenprüfung ---------- */
   function withItems(inp, extra) { const c = JSON.parse(JSON.stringify(inp)); c.items = c.items.concat(extra); return c; }
 
-  // Wie viele Stück Füllware (z. B. Kantholz 60×60) passen noch zusätzlich in den Stamm?
+  const DACHLATTEN = [[24, 48], [30, 50], [40, 60]];
+  // Füllware/Dachlatten: automatisch die Latten-Größe mit den meisten Stück wählen (oder feste Maße)
   function buildPlan(inp) {
-    const base = buildCore(inp);
     const f = inp.fill;
-    if (!f || !f.on || !base.valid || !(f.t > 0 && f.w > 0)) return base;
-    const fidx = inp.items.length;
-    const l = f.l > 0 ? f.l : Math.floor(base.g.L);
-    const mk = q => ({ t: f.t, w: f.w, l, q, side: true, fill: true });
-    const baseErr = base.warnings.some(w => w.lvl === 'err');
-    let n = 0, best = null;
-    if (!baseErr) {
-      for (let q = 1; q <= 80; q++) {
-        const p = buildCore(withItems(inp, [mk(q)]));
-        if (p.warnings.some(w => w.lvl === 'err' || (w.item === fidx && w.lvl !== 'info'))) break;
-        n = q; best = p;
-      }
-    }
-    const out = best || base;
-    out.fill = { n, t: f.t, w: f.w, l, idx: fidx, baseYield: base.res ? base.res.yield : 0, baseErr };
+    if (!f || !f.on) return buildCore(inp);
+    const base = buildCore(inp);
+    if (!base.valid) return base;
+    const len = f.l > 0 ? f.l : Math.floor(base.g.L);
+    const cands = f.auto ? DACHLATTEN.map(c => ({ t: c[0], w: c[1] })) : [{ t: num(f.t, 0), w: num(f.w, 0) }];
+    let best = null; const tried = [];
+    cands.forEach(c => {
+      if (!(c.t > 0 && c.w > 0)) return;
+      const p = buildCore(inp, { t: c.t, w: c.w, l: len });
+      const n = p.fill ? p.fill.n : 0;
+      tried.push({ t: c.t, w: c.w, n });
+      if (!best || n > best.n || (n === best.n && p.res && best.p.res && p.res.yield > best.p.res.yield)) best = { p, n };
+    });
+    const out = best ? best.p : base;
+    if (!out.fill) out.fill = { n: 0, t: cands[0].t, w: cands[0].w, l: len, idx: inp.items.length, layers: 0 };
+    out.fill.auto = !!f.auto; out.fill.tried = tried; out.fill.baseYield = base.res ? base.res.yield : 0;
+    out.fill.baseErr = base.warnings.some(w => w.lvl === 'err');
     return out;
   }
 
@@ -403,8 +449,8 @@
   /* ---------- Arbeitsschritte ---------- */
   function opLabel(plan, op) {
     if (op.kind === 'slab') return op.face && !op.flat ? 'Schwarte abnehmen' : (op.face ? 'Schwarte abnehmen → Seite ' + op.face + ' flach' : 'Schwarte abnehmen');
-    const src = plan.items.find(i => i.idx === op.item);
-    const nm = src && src.fill ? 'Füllware ' + kindName(op.t, op.w) : op.kind === 'side' ? 'Seitenware' : kindName(op.t, op.w);
+    if (op.kind === 'fill') return 'Füllware-Brett ' + op.t + ' × ' + op.w + ' mm abnehmen → später ' + op.fillN + '× ' + op.fillP + '×' + op.t + ' auftrennen';
+    const nm = op.kind === 'side' ? 'Seitenware' : kindName(op.t, op.w);
     return nm + ' ' + op.t + ' × ' + op.w + ' mm abnehmen';
   }
 

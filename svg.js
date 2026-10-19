@@ -31,6 +31,17 @@
     poly.forEach(p => { x0 = Math.min(x0, p[0]); x1 = Math.max(x1, p[0]); y0 = Math.min(y0, p[1]); y1 = Math.max(y1, p[1]); });
     return { cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, w: x1 - x0, h: y1 - y0 };
   }
+  // Füllware-Brett in einzelne Latten (Breite P, Schnittfuge kr) zerlegen – Polygone im Stamm-Koordinatensystem
+  function strips(poly, op, kr) {
+    if (!op || !(op.fillN > 1)) return [poly];
+    const v = [-op.n[1], op.n[0]], P = op.fillP, W = op.fillN * P + (op.fillN - 1) * kr, out = [];
+    for (let i = 0; i < op.fillN; i++) {
+      const lo = -W / 2 + i * (P + kr);
+      const a = S.clipHalf(poly, v[0], v[1], lo, true), b = S.clipHalf(a, v[0], v[1], lo + P, false);
+      if (b.length > 2) out.push(b);
+    }
+    return out;
+  }
   function xAt(poly, y) { // [min,max] x der Fläche auf Höhe y (nur Bildschirm-Koordinaten, y nach oben)
     let lo = Infinity, hi = -Infinity;
     for (let i = 0; i < poly.length; i++) {
@@ -137,6 +148,11 @@
         out += '<polygon points="' + P(poly) + '" fill="#8A8A8A" fill-opacity=".05" stroke="#6a6a6a" stroke-width="1" stroke-dasharray="3 3"/>';
       } else if (j === i) {
         out += '<polygon points="' + P(poly) + '" fill="url(#' + u + 'o)" stroke="' + ORANGE + '" stroke-width="3"/>';
+        if (ops[j].kind === 'fill' && ops[j].fillN > 1) strips(pc, ops[j], plan.k).forEach(sp => { out += '<polygon points="' + P(sp.map(TP)) + '" fill="none" stroke="' + INK + '" stroke-width="1.5"/>'; });
+      } else if (ops[j].kind === 'fill') {
+        strips(pc, ops[j], plan.k).forEach(sp => { out += '<polygon points="' + P(sp.map(TP)) + '" fill="' + color(ops[j].item) + '" fill-opacity=".6" stroke="' + INK + '" stroke-width="1"/>'; });
+        const b = bboxCenter(poly);
+        if (b.w > 30 && b.h > 11) out += text(b.cx, b.cy + 4, ops[j].fillN + '×', { size: 11, anchor: 'middle', halo: true });
       } else if (ops[j].item != null) {
         out += '<polygon points="' + P(poly) + '" fill="' + color(ops[j].item) + '" fill-opacity=".55" stroke="' + INK + '" stroke-width="1" stroke-dasharray="4 3"/>';
         const b = bboxCenter(poly);
@@ -211,11 +227,13 @@
       let fill = '#B9AE98';
       if (op && op.item != null) fill = color(op.item);
       let svg = '<polygon points="' + P(q) + '" fill="' + fill + '" stroke="' + INK + '" stroke-width="1.2"/>';
+      if (op && op.kind === 'fill' && op.fillN > 1) strips(poly, op, plan.k).forEach(sp => { svg += '<polygon points="' + P(sp.map(T)) + '" fill="' + fill + '" stroke="' + INK + '" stroke-width="1.4"/>'; });
       if (isDone) svg += '<polygon points="' + P(q) + '" fill="url(#' + u + 'h)" fill-opacity=".8" stroke="#666" stroke-width="1"/>';
       else if (!op || op.item == null) svg += '<polygon points="' + P(q) + '" fill="url(#' + u + 'h)" fill-opacity=".45"/>';
       if (isCur) svg += '<polygon points="' + P(q) + '" fill="none" stroke="' + ORANGE + '" stroke-width="5" stroke-linejoin="round"/>';
       const b = bboxCenter(q);
-      if (op && op.item != null && b.w > 38 && b.h > 11) svg += text(b.cx, b.cy + 4, op.t + '×' + op.w, { size: 10, anchor: 'middle', halo: true });
+      if (op && op.kind === 'fill' && b.w > 22 && b.h > 9) svg += text(b.cx, b.cy + 4, op.fillN + '×', { size: 11, anchor: 'middle', halo: true });
+      else if (op && op.item != null && b.w > 38 && b.h > 11) svg += text(b.cx, b.cy + 4, op.t + '×' + op.w, { size: 10, anchor: 'middle', halo: true });
       if (isDone && b.w > 14 && b.h > 10) svg += text(b.cx, b.cy + 5, '✓', { size: 16, anchor: 'middle', halo: true, fill: '#006B2D' });
       return svg;
     };
@@ -223,6 +241,7 @@
     const rest = plan.rest;
     if (plan.leftover.length > 2) {
       const ro = rest && rest.type === 'main' ? { item: rest.b.idx, t: rest.b.t, w: rest.b.w } : null;
+      if (rest && rest.type === 'fill') out += '<!-- Rest: Füllware -->';
       out += piece(plan.leftover, ro, done.size >= plan.ops.length && ro != null, false);
     }
     plan.ops.forEach(op => {
@@ -230,7 +249,8 @@
     });
     out += text(8, 18, 'Zopf ⌀ ' + S.fmt(g.dtop / 10, 1) + ' cm (voll)', { size: 13 });
     out += text(8, 36, 'Fuß ⌀ ' + S.fmt(g.dbutt / 10, 1) + ' cm (gestrichelt)', { size: 13 });
-    out += text(352, 352, 'Schnittfuge schwarz · Querschnitt maßstäblich', { size: 10, anchor: 'end', weight: 700 });
+    if (plan.fill && plan.fill.n) out += text(8, 352, 'Latten ' + plan.fill.t + '×' + plan.fill.w + ': ' + plan.fill.n + ' Stk', { size: 14, fill: '#B83C00' });
+    out += text(352, 352, 'Fuge schwarz · maßstäblich', { size: 10, anchor: 'end', weight: 700 });
     return out + '</svg>';
   }
 
