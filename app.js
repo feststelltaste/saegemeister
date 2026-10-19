@@ -163,8 +163,18 @@
     body.appendChild(dims);
     fT = field(dims, f, 't', { label: 'Füllware Dicke', unit: 'mm', step: 1, min: 1, max: 300, dec: 0 }, upd);
     fW = field(dims, f, 'w', { label: 'Füllware Breite', unit: 'mm', step: 1, min: 1, max: 300, dec: 0 }, upd);
+    field(body, f, 'wane', { label: 'Baumkante an Latten erlaubt (je Seite)', unit: 'mm', step: 1, min: 0, max: 15, dec: 0, chips: [0, 3, 5, 8] }, upd);
     field(body, f, 'l', { label: 'Länge (0 = Stammlänge)', unit: 'mm', step: 100, min: 0, max: 20000, dec: 0, chips: [0, 2000, 3000, 4000] }, upd);
     body.appendChild(el('div', 'msg info fillinfo', ''));
+    box.appendChild(body);
+  }
+  function buildSch() {
+    const box = $('#fSch'); box.innerHTML = '';
+    if (!inp.schwart || typeof inp.schwart !== 'object') inp.schwart = clone(S.DEFAULTS.schwart);
+    const s = inp.schwart, body = el('div'); body.hidden = !s.on;
+    checkbox(box, 'Schwarten als Bretter abnehmen', !!s.on, v => { s.on = v; body.hidden = !v; upd(); });
+    field(body, s, 't', { label: 'Dicke der Schwartenbretter', unit: 'mm', step: 1, min: 10, max: 100, dec: 0, chips: [20, 24, 30, 40] }, upd);
+    field(body, s, 'minW', { label: 'Mindestbreite (schmaler = Abfall)', unit: 'mm', step: 5, min: 20, max: 200, dec: 0, chips: [40, 60, 80, 100] }, upd);
     box.appendChild(body);
   }
   const T_CHIPS = [24, 30, 50, 100, 150], W_CHIPS = [80, 100, 150, 200, 250], L_CHIPS = [3000, 4000, 5000, 6000];
@@ -219,7 +229,7 @@
       '<p class="note">' + plan.ops.length + ' Schnitte · ' + plan.steps.filter(s => s.kind === 'turn').length + '× drehen · ' + esc(plan.stratName.replace(/ \(.*/, '')) + (plan.stackMode === 'half' ? ' · erst bis zur Mitte, dann wenden' : '') + '</p>';
     let h = '';
     plan.items.forEach(i => { h += '<span><span class="swatch" style="background:' + G.colorOf(i.idx) + '"></span>' + (i.fill ? 'Latten' : 'Pos. ' + (i.idx + 1)) + ': ' + i.t + '×' + i.w + ' · ' + i.q + ' Stk</span>'; });
-    $('#planLegend').innerHTML = h + '<span><span class="swatch" style="background:#B9AE98"></span>Schwarte / Besäumstreifen (schraffiert)</span>';
+    $('#planLegend').innerHTML = h + '<span><span class="swatch" style="background:#B9AE98"></span>Schwarte / Besäumstreifen (schraffiert)</span>' + (plan.res.nSchwart ? '<span><span class="swatch" style="background:#D8C79B"></span>Schwartenbretter (optional)</span>' : '');
   }
   // Statusleiste oben + Hinweise an den Positionen: sofort sichtbar, wenn etwas nicht passt
   function renderStatus() {
@@ -265,12 +275,13 @@
     h += '<div class="tile"><small>Schnittfuge / Sägemehl</small><b>' + fmt(r.vKerf, 3) + '</b><em>m³ · ' + fmt(r.kerfShare, 1) + ' %</em></div>';
     h += '<div class="tile"><small>Sonstiger Verlust</small><b>' + fmt(r.vOther, 3) + '</b><em>m³ · ' + fmt(r.otherShare, 1) + ' %</em></div>';
     if (plan.fill && plan.fill.n) h += '<div class="tile main"><small>Dachlatten / Füllware</small><b>' + plan.fill.n + ' Stk</b><em> ' + plan.fill.t + '×' + plan.fill.w + ' mm · ' + fmt(plan.fill.n * plan.fill.l / 1000, 0) + ' lfm</em></div>';
+    if (r.nSchwart) h += '<div class="tile"><small>Schwartenbretter (optional)</small><b>' + r.nSchwart + '</b><em>Stk · ' + fmt(r.vSchwart, 3) + ' m³ unbesäumt · mit ' + fmt(r.yield + r.schwartShare, 1) + ' % gesamt</em></div>';
     h += '<div class="tile"><small>Hölzer gesamt</small><b>' + r.pieces + '</b><em>Stück · ' + r.cuts + ' Schnitte</em></div>';
     h += '<div class="tile"><small>Höhenausgleich (Zopf)</small><b>' + fmt(r.liftSel, 0) + ' mm</b><em>A ' + fmt(r.lift.A, 0) + ' · B ' + fmt(r.lift.B, 0) + ' mm</em></div>';
     h += '</div>';
-    const pk = Math.max(0, r.yield), pf = Math.max(0, r.kerfShare), po = Math.max(0, 100 - pk - pf);
-    h += '<div class="split" aria-hidden="true"><div style="width:' + pk + '%;background:#0B7A33"></div><div style="width:' + pf + '%;background:#111"></div><div style="width:' + po + '%;background:#FF5A00"></div></div>';
-    h += '<div class="split-leg"><span>■ Schnittholz ' + fmt(pk, 1) + ' %</span><span>■ Fuge ' + fmt(pf, 1) + ' %</span><span>■ Schwarte/Reste/Schwund ' + fmt(po, 1) + ' %</span></div>';
+    const pk = Math.max(0, r.yield), pf = Math.max(0, r.kerfShare), pb = Math.max(0, r.barkShare), ps = Math.max(0, r.schwartShare), po = Math.max(0, 100 - pk - pf - pb - ps);
+    h += '<div class="split" aria-hidden="true"><div style="width:' + pk + '%;background:#0B7A33"></div><div style="width:' + pf + '%;background:#111"></div><div style="width:' + pb + '%;background:#7a5230"></div><div style="width:' + ps + '%;background:#B9AE98"></div><div style="width:' + po + '%;background:#FF5A00"></div></div>';
+    h += '<div class="split-leg"><span>■ Schnittholz ' + fmt(pk, 1) + ' %</span><span>■ Fuge ' + fmt(pf, 1) + ' %</span><span>■ Rinde ' + fmt(pb, 1) + ' %</span><span>■ Schwartenbretter ' + fmt(ps, 1) + ' %</span><span>■ Schwarten/Reste/Besäumen ' + fmt(po, 1) + ' %</span></div>';
     const bad = plan.warnings.filter(w => w.lvl === 'err').length;
     h += '<div class="msgs">';
     if (!bad) h += '<div class="msg ok">✓ Plausibilitäts-Check: Muster passt geometrisch (am Zopf) und vom Volumen her in den Stamm.</div>';
@@ -303,7 +314,7 @@
   function renderLegend() {
     let h = '';
     plan.items.forEach(i => { h += '<span><span class="swatch" style="background:' + G.colorOf(i.idx) + '"></span>' + (i.fill ? 'Füllware' : 'Pos. ' + (i.idx + 1)) + ': ' + i.t + '×' + i.w + ' · ' + i.q + ' Stk' + (i.side && !i.fill ? ' (Seite)' : '') + '</span>'; });
-    $('#legend').innerHTML = h + '<span><span class="swatch" style="background:#B9AE98"></span>Schwarte / Besäumstreifen (schraffiert)</span>';
+    $('#legend').innerHTML = h + '<span><span class="swatch" style="background:#B9AE98"></span>Schwarte / Besäumstreifen (schraffiert)</span>' + (plan.res.nSchwart ? '<span><span class="swatch" style="background:#D8C79B"></span>Schwartenbretter (optional)</span>' : '');
   }
   function renderFlow() {
     flowDirty = false;
@@ -435,7 +446,7 @@
   /* ---------- Start ---------- */
   function init() {
     load();
-    buildStamm(); buildSaw(); buildItems(); buildFill();
+    buildStamm(); buildSaw(); buildItems(); buildFill(); buildSch();
     document.querySelectorAll('#modeSeg button').forEach(b => b.addEventListener('click', () => { inp.mode = b.dataset.mode; syncVis(); upd(); }));
     $('#addItem').addEventListener('click', () => {
       const last = inp.items[inp.items.length - 1];

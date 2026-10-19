@@ -52,7 +52,8 @@
     mode: 'mid', dmid: 40, taper: 1, dtop: 38, dbutt: 42, len: 4,
     form: 'gerade', pfeil: 2, bark: 10, species: 'fichte', saw: 'duenn', kerf: 2.0,
     strategy: 'auto', level: 'A', alt: false, noEdger: true,
-    fill: { on: true, auto: true, t: 30, w: 50, l: 0 },
+    fill: { on: true, auto: true, t: 30, w: 50, l: 0, wane: 0 },
+    schwart: { on: true, t: 24, minW: 60 },
     items: [
       { t: 50, w: 200, l: 4000, q: 2, side: false },
       { t: 24, w: 150, l: 4000, q: 4, side: false },
@@ -174,7 +175,7 @@
   }
 
   /* ---------- Schnittplan ---------- */
-  function planOps(strat, mains, sides, k, rFit, alt, fillSpec, fillIdx) {
+  function planOps(strat, mains, sides, k, rFit, alt, fillSpec, fillIdx, schSpec) {
     // Stapel-Reihenfolge: 'alt' = Wechselschnitt (Spannung), 'half' = bis zur Mitte, dann wenden (Stamm liegt unten noch rund),
     // 'seq' = durchgehend von oben (Kantholz liegt flach und rechtwinklig auf dem Bett)
     const stackMode = alt ? 'alt' : (strat === 'vier' ? 'seq' : 'half');
@@ -194,7 +195,7 @@
         [[fillSpec.t, fillSpec.w], [fillSpec.w, fillSpec.t]].forEach(tp => {
           const T = tp[0], P = tp[1], hi = lo + T;
           if (hi >= rFit - 1) return;
-          const chord = Math.min(capW, 2 * Math.sqrt(Math.max(0, rFit * rFit - hi * hi)));
+          const chord = Math.min(capW, 2 * Math.sqrt(Math.max(0, rFit * rFit - hi * hi)) + 2 * (fillSpec.wane || 0));
           const n = Math.floor((chord + k) / (P + k));
           if (n < 1) return;
           const score = n / (T + k);
@@ -204,6 +205,25 @@
         out.push(best); lo = best.hi + k;
       }
       return out;
+    }
+    // Schwarten als (unbesäumte) Bretter abnehmen, solange die Breite am Außenrand noch brauchbar ist
+    function schwartLayers(lo, capW) {
+      const out = [];
+      if (!schSpec) return out;
+      while (out.length < 12) {
+        const T = schSpec.t, hi = lo + T;
+        if (hi >= rFit - 1) break;
+        const chord = Math.min(capW, 2 * Math.sqrt(Math.max(0, rFit * rFit - hi * hi)));
+        if (chord < schSpec.minW) break;
+        out.push({ type: 'schwart', T, W: Math.floor(chord), lo, hi });
+        lo = hi + k;
+      }
+      return out;
+    }
+    function layersFrom(lo, capW) {
+      const f = fillLayers(lo, capW).map(L => Object.assign({ type: 'fill' }, L));
+      const lo2 = f.length ? f[f.length - 1].hi + k : lo;
+      return f.concat(schwartLayers(lo2, capW));
     }
     const fillOp = L => ({ kind: 'fill', item: fillIdx, t: L.T, w: L.k * L.P + (L.k - 1) * k, fillN: L.k, fillP: L.P });
 
@@ -217,7 +237,7 @@
         const chord = Math.min(capW, 2 * Math.sqrt(Math.max(0, rFit * rFit - hi * hi)));
         if (hi < rFit && s.w <= chord + 0.01) { placed.push({ lo, hi, kind: 'side', item: s.idx, t: s.t, w: s.w }); lo = hi + k; sideQ.splice(i, 1); } else i++;
       }
-      fillLayers(lo, capW).forEach(L => placed.push(Object.assign({ lo: L.lo, hi: L.hi }, fillOp(L))));
+      layersFrom(lo, capW).forEach(L => placed.push(L.type === 'fill' ? Object.assign({ lo: L.lo, hi: L.hi }, fillOp(L)) : { lo: L.lo, hi: L.hi, kind: 'schwart', t: L.T, w: L.W }));
       const topFace = placed.length ? placed[placed.length - 1].hi : dFlat;
       if (!placed.length || topFace + k < rFit - 2) {
         ops.push({ n, d: topFace, kind: 'slab', face: faceNo, flat: !placed.length });
@@ -233,15 +253,15 @@
       const pcs = [];
       let layers = [];
       if (withSlabs) {
-        layers = fillLayers(Hm / 2 + k, capW);
+        layers = layersFrom(Hm / 2 + k, capW);
         const topLo = layers.length ? layers[layers.length - 1].hi + k : Hm / 2 + k;
         pcs.push({ type: 'slab', lo: topLo, hi: Infinity });
-        for (let i = layers.length - 1; i >= 0; i--) pcs.push({ type: 'fill', lo: layers[i].lo, hi: layers[i].hi, L: layers[i] });
+        for (let i = layers.length - 1; i >= 0; i--) pcs.push({ type: layers[i].type, lo: layers[i].lo, hi: layers[i].hi, L: layers[i] });
       }
       let hi = Hm / 2;
       mains.forEach(b => { pcs.push({ type: 'main', lo: hi - b.t, hi, b }); hi = hi - b.t - k; });
       if (withSlabs) {
-        layers.forEach(L => pcs.push({ type: 'fill', lo: -L.hi, hi: -L.lo, L }));
+        layers.forEach(L => pcs.push({ type: L.type, lo: -L.hi, hi: -L.lo, L }));
         const botHi = layers.length ? -layers[layers.length - 1].hi - k : -Hm / 2 - k;
         pcs.push({ type: 'slab', lo: -Infinity, hi: botHi });
       }
@@ -256,6 +276,7 @@
         const op = { n, d, kind: p.type };
         if (p.type === 'main') { op.item = p.b.idx; op.t = p.b.t; op.w = p.b.w; }
         if (p.type === 'fill') Object.assign(op, fillOp(p.L));
+        if (p.type === 'schwart') { op.t = p.L.T; op.w = p.L.W; }
         ops.push(op);
         chunk++;
       }
@@ -326,7 +347,8 @@
     const alt = !!inp.alt;
 
     const fillIdx = inp.items.length;
-    const pl = planOps(strat, mains, sides, k, rEff, alt, fillIn, fillIdx);
+    const sch = inp.schwart && inp.schwart.on && inp.schwart.t > 0 ? { t: num(inp.schwart.t, 24), minW: Math.max(20, num(inp.schwart.minW, 60)) } : null;
+    const pl = planOps(strat, mains, sides, k, rEff, alt, fillIn, fillIdx, sch);
     const fillN = pl.ops.reduce((a, o) => a + (o.fillN || 0), 0) + (pl.rest && pl.rest.type === 'fill' ? pl.rest.L.k : 0);
     if (fillIn && fillN > 0) {
       items.push({ idx: fillIdx, t: fillIn.t, w: fillIn.w, l: fillIn.l, q: fillN, side: true, fill: true });
@@ -361,7 +383,8 @@
     pl.ops.forEach((op, i) => {
       if (op.item == null) return;
       const have = minFaceWidth(chk.res[i].piece, op.n, op.d, k, op.t);
-      if (have < op.w - 0.5) {
+      const tol = op.kind === 'fill' && fillIn ? 2 * (fillIn.wane || 0) : 0;
+      if (have < op.w - 0.5 - tol) {
         warn.push({ lvl: 'err', item: op.item, msg: 'Position ' + (op.item + 1) + ' (' + op.t + '×' + op.w + ' mm) passt am Zopfende nicht in den Stamm – dort sind nur ca. ' + Math.floor(have) + ' mm Breite möglich.' });
       }
     });
@@ -411,12 +434,17 @@
     const simMid = simulate(pl.ops, g.dmid / 2, k);
     simMid.res.forEach(s => { kerfArea += area(s.kerfP); });
     const vKerf = kerfArea * g.L / 1e9;
-    const vOther = g.vRound - vSawn - vKerf;
+    let vSchwart = 0, nSchwart = 0;
+    pl.ops.forEach((o, i) => { if (o.kind === 'schwart') { vSchwart += area(chk.res[i].piece) * g.L / 1e9; nSchwart++; } });
+    const vOther = g.vRound - vSawn - vKerf - vSchwart;
     plan.res = {
       vRound: g.vRound, vSawn, vKerf, vOther, pieces,
       yield: g.vRound > 0 ? vSawn / g.vRound * 100 : 0,
       kerfShare: g.vRound > 0 ? vKerf / g.vRound * 100 : 0,
       otherShare: g.vRound > 0 ? vOther / g.vRound * 100 : 0,
+      barkShare: g.vRound > 0 ? Math.PI / 4 * (Math.pow(g.dmid / 1000, 2) - Math.pow(Math.max(0, g.dmid - 2 * bark) / 1000, 2)) * (g.L / 1000) / g.vRound * 100 : 0,
+      vBark: Math.PI / 4 * (Math.pow(g.dmid / 1000, 2) - Math.pow(Math.max(0, g.dmid - 2 * bark) / 1000, 2)) * (g.L / 1000),
+      vSchwart, nSchwart, schwartShare: g.vRound > 0 ? vSchwart / g.vRound * 100 : 0,
       cuts: pl.ops.length, lift: g.lift, liftSel
     };
     if (vSawn > g.vRound) warn.push({ lvl: 'err', msg: 'Schnittholzvolumen (' + fmt(vSawn, 3) + ' m³) ist größer als das Rundholzvolumen (' + fmt(g.vRound, 3) + ' m³).' });
@@ -447,7 +475,7 @@
     let best = null; const tried = [];
     cands.forEach(c => {
       if (!(c.t > 0 && c.w > 0)) return;
-      const p = buildCore(inp, { t: c.t, w: c.w, l: len });
+      const p = buildCore(inp, { t: c.t, w: c.w, l: len, wane: Math.max(0, num(f.wane, 0)) });
       const n = p.fill ? p.fill.n : 0;
       tried.push({ t: c.t, w: c.w, n });
       if (!best || n > best.n || (n === best.n && p.res && best.p.res && p.res.yield > best.p.res.yield)) best = { p, n };
@@ -475,6 +503,7 @@
   function opLabel(plan, op) {
     if (op.kind === 'slab') return op.face && !op.flat ? 'Schwarte abnehmen' : (op.face ? 'Schwarte abnehmen → Seite ' + op.face + ' flach' : 'Schwarte abnehmen');
     if (op.kind === 'fill') return 'Füllware-Brett ' + op.t + ' × ' + op.w + ' mm abnehmen → später ' + op.fillN + '× ' + op.fillP + '×' + op.t + ' auftrennen';
+    if (op.kind === 'schwart') return 'Schwartenbrett ' + op.t + ' × ca. ' + op.w + ' mm abnehmen (unbesäumt, später optional nachsäumen)';
     const nm = op.kind === 'side' ? 'Seitenware' : kindName(op.t, op.w);
     const edge = op.wFull - op.w > 2 ? ' (unbesäumt ca. ' + op.wFull + ' mm breit, später auf ' + op.w + ' besäumen)' : '';
     return nm + ' ' + op.t + ' × ' + op.w + ' mm abnehmen' + edge;

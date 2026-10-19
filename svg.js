@@ -168,6 +168,8 @@
         if (eg) eg.sides.forEach(sp => { if (sp.length > 2) out += '<polygon points="' + P(sp.map(TP)) + '" fill="url(#' + u + 'h)" fill-opacity=".9" stroke="#555" stroke-width="1"/>'; });
         const b = bboxCenter(eg && eg.core.length > 2 ? eg.core.map(TP) : poly);
         if (b.w > 40 && b.h > 11) out += text(b.cx, b.cy + 4, ops[j].t + '×' + ops[j].w, { size: 10, anchor: 'middle', halo: true });
+      } else if (ops[j].kind === 'schwart') {
+        out += '<polygon points="' + P(poly) + '" fill="#D8C79B" fill-opacity=".8" stroke="#555" stroke-width="1" stroke-dasharray="4 3"/>';
       } else {
         out += '<polygon points="' + P(poly) + '" fill="none" stroke="#777" stroke-width="1" stroke-dasharray="2 3"/>';
       }
@@ -232,14 +234,17 @@
     const T = p => [cx + p[0] * s, cy - p[1] * s];
     out += '<circle cx="' + cx + '" cy="' + cy + '" r="' + r1(g.dbutt / 2 * s) + '" fill="#F6EBD3" stroke="' + INK + '" stroke-width="2" stroke-dasharray="7 5"/>';
     out += '<circle cx="' + cx + '" cy="' + cy + '" r="' + r1(g.dtop / 2 * s) + '" fill="' + WOOD + '" stroke="' + BARK + '" stroke-width="5"/>';
+    const b0 = bboxCenter;
     const piece = (poly, op, isDone, isCur) => {
       if (poly.length < 3) return '';
       const q = poly.map(T);
       let fill = '#B9AE98';
       if (op && op.item != null) fill = color(op.item);
+      if (op && op.kind === 'schwart') fill = '#D8C79B';
       let svg = '<polygon points="' + P(q) + '" fill="' + fill + '" stroke="' + INK + '" stroke-width="1.2"/>';
       if (op && op.kind === 'fill' && op.fillN > 1) strips(poly, op, plan.k).forEach(sp => { svg += '<polygon points="' + P(sp.map(T)) + '" fill="' + fill + '" stroke="' + INK + '" stroke-width="1.4"/>'; });
       if (isDone) svg += '<polygon points="' + P(q) + '" fill="url(#' + u + 'h)" fill-opacity=".8" stroke="#666" stroke-width="1"/>';
+      else if (op && op.kind === 'schwart') { if (b0(q).w > 40) svg += text(b0(q).cx, b0(q).cy + 4, 'Schw.-Brett', { size: 9, anchor: 'middle', halo: true }); }
       else if (!op || op.item == null) svg += '<polygon points="' + P(q) + '" fill="url(#' + u + 'h)" fill-opacity=".45"/>';
       if (isCur) svg += '<polygon points="' + P(q) + '" fill="none" stroke="' + ORANGE + '" stroke-width="5" stroke-linejoin="round"/>';
       const eg = isDone ? null : edgeSplit(poly, op);

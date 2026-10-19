@@ -1,7 +1,7 @@
 const assert = require('assert');
 const S = require('../calc.js');
 const clone = o => JSON.parse(JSON.stringify(o));
-const base0 = () => { const o = clone(S.DEFAULTS); o.fill = { on: false }; return o; };
+const base0 = () => { const o = clone(S.DEFAULTS); o.fill = { on: false }; o.schwart = { on: false }; return o; };
 let fails = 0;
 function t(name, fn) { try { fn(); console.log('ok  -', name); } catch (e) { fails++; console.log('FAIL-', name, '\n', e.message); } }
 
@@ -93,5 +93,22 @@ t('Ohne Besäumsäge: auto = Prisma, Nachschnitt-Schritte für schmalere Bretter
   const post = p.steps.filter(s => s.kind === 'post');
   assert.ok(post.some(s => /150 mm Breite/.test(s.title)), post.map(s => s.title).join(' | '));
   assert.ok(post.some(s => /Latten-Bretter/.test(s.title)));
+});
+t('Baumkante erlaubt -> mehr Latten, Rinde im Ergebnis', () => {
+  const inp = base0(); inp.mode = 'ends'; inp.dtop = 28; inp.dbutt = 32; inp.items = [{ t: 24, w: 150, l: 4000, q: 8 }];
+  inp.fill = { on: true, auto: false, t: 30, w: 50, l: 0, wane: 0 };
+  const a = S.buildPlan(inp); inp.fill.wane = 6; const b = S.buildPlan(inp);
+  assert.ok(b.fill.n > a.fill.n, a.fill.n + ' -> ' + b.fill.n);
+  assert.ok(!b.warnings.some(w => w.lvl === 'err'));
+  assert.ok(a.res.barkShare > 5 && a.res.barkShare < 20);
+});
+t('Schwarten als Bretter: eigene Schnitte, Volumen separat', () => {
+  const inp = base0(); inp.items = [{ t: 50, w: 200, l: 4000, q: 2, side: false }]; inp.strategy = 'prisma';
+  const a = S.buildPlan(inp); inp.schwart = { on: true, t: 24, minW: 60 }; const b = S.buildPlan(inp);
+  assert.ok(b.res.nSchwart > 0 && b.res.vSchwart > 0);
+  assert.ok(b.ops.length > a.ops.length);
+  assert.ok(Math.abs(b.res.vSawn - a.res.vSawn) < 1e-9);
+  assert.ok(b.res.vOther < a.res.vOther);
+  assert.ok(!b.warnings.some(w => w.lvl === 'err'));
 });
 process.exit(fails ? 1 : 0);
