@@ -155,7 +155,7 @@ select, .sel { width: 100%; min-height: var(--tap); font-size: 18px; font-weight
 .step.done { background: var(--done); }
 .step.done .st-title { text-decoration: line-through; color: var(--fg2); }
 .step.important .st-main { background: var(--w-bg); }
-.st-main { display: grid; grid-template-columns: 48px 1fr; gap: 18px; padding: 8px; align-items: center; }
+.st-main { display: grid; grid-template-columns: 48px 1fr; gap: 28px; padding: 8px; align-items: center; }
 .tick { width: 48px; height: 48px; border: 2px solid var(--line); border-radius: 8px; background: var(--field); font-size: 28px; font-weight: 900; line-height: 1; color: var(--tickhint); padding: 0; }
 .step.done .tick { background: var(--ok); border-color: var(--ok); color: #fff; }
 .st-title { font-size: 19px; font-weight: 900; }
