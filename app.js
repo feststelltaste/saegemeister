@@ -133,6 +133,7 @@
       inp.saw = v; inp.kerf = S.SAWS.find(s => s.id === v).kerf; ui.kerf.refresh(); upd();
     });
     ui.kerf = field(box, inp, 'kerf', { label: 'Schnittfugenbreite', unit: 'mm', step: 0.1, min: 0, max: 15, dec: 1, chips: [1.5, 2.0, 2.5, 3.0] }, upd);
+    checkbox(box, 'Keine Besäumsäge – alles auf der Blockbandsäge', inp.noEdger !== false, v => { inp.noEdger = v; upd(); });
     select(box, 'Einschnitt-Strategie', S.STRATEGIES, inp.strategy, v => { inp.strategy = v; upd(); });
     select(box, 'Höhenausgleich (Zopf anheben)', S.LEVELS, inp.level, v => { inp.level = v; upd(); });
     const altBox = checkbox(box, 'Wechselschnitt (häufiger 180° wenden – bei Spannungsholz)', !!inp.alt, v => { inp.alt = v; upd(); });

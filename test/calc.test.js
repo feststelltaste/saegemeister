@@ -85,4 +85,13 @@ t('Dachlatten-Optimum: automatisch beste Größe, Anzahl stimmt mit Ops überein
   assert.ok(p.items.some(i => i.fill && i.q === p.fill.n));
   assert.ok(!p.warnings.some(w => w.lvl === 'err'));
 });
+t('Ohne Besäumsäge: auto = Prisma, Nachschnitt-Schritte für schmalere Bretter und Latten', () => {
+  const inp = base0(); inp.noEdger = true; inp.fill = { on: true, auto: true, t: 30, w: 50, l: 0 };
+  inp.items = [{ t: 50, w: 200, l: 4000, q: 2, side: false }, { t: 24, w: 150, l: 4000, q: 2, side: false }];
+  const p = S.buildPlan(inp);
+  assert.strictEqual(p.strat, 'prisma');
+  const post = p.steps.filter(s => s.kind === 'post');
+  assert.ok(post.some(s => /150 mm Breite/.test(s.title)), post.map(s => s.title).join(' | '));
+  assert.ok(post.some(s => /Latten-Bretter/.test(s.title)));
+});
 process.exit(fails ? 1 : 0);

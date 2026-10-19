@@ -51,7 +51,7 @@
   const DEFAULTS = {
     mode: 'mid', dmid: 40, taper: 1, dtop: 38, dbutt: 42, len: 4,
     form: 'gerade', pfeil: 2, bark: 10, species: 'fichte', saw: 'duenn', kerf: 2.0,
-    strategy: 'auto', level: 'A', alt: false,
+    strategy: 'auto', level: 'A', alt: false, noEdger: true,
     fill: { on: true, auto: true, t: 30, w: 50, l: 0 },
     items: [
       { t: 50, w: 200, l: 4000, q: 2, side: false },
@@ -104,6 +104,21 @@
     poly.forEach(p => { const d = v[0] * p[0] + v[1] * p[1]; lo = Math.min(lo, d); hi = Math.max(hi, d); });
     return poly.length ? hi - lo : 0;
   }
+  // Schmalste Breite eines Stücks: an der inneren oder äußeren Fläche (Waldkante außen!)
+  function minFaceWidth(piece, n, d, k, t) {
+    if (piece.length < 3) return 0;
+    const hi = d + k + t, v = [-n[1], n[0]];
+    const top = clipHalf(clipHalf(piece, n[0], n[1], hi - 0.5, true), n[0], n[1], hi, false);
+    const bot = clipHalf(piece, n[0], n[1], d + k + 0.5, false);
+    return Math.min(extentAlong(top, v), extentAlong(bot, v));
+  }
+  function restWidth(poly, n) {
+    if (poly.length < 3) return 0;
+    let lo = Infinity, hi = -Infinity;
+    poly.forEach(p => { const d = n[0] * p[0] + n[1] * p[1]; lo = Math.min(lo, d); hi = Math.max(hi, d); });
+    const v = [-n[1], n[0]];
+    return Math.min(extentAlong(clipHalf(poly, n[0], n[1], hi - 0.5, true), v), extentAlong(clipHalf(poly, n[0], n[1], lo + 0.5, false), v));
+  }
   const rot = (n, p) => [p[0] * n[1] - p[1] * n[0], p[0] * n[0] + p[1] * n[1]]; // n -> nach oben
 
   /* ---------- Hilfsfunktionen ---------- */
@@ -149,6 +164,8 @@
     if (inp.strategy && inp.strategy !== 'auto') return inp.strategy;
     if (!items.length) return 'scharf';
     if (items.some(i => i.t >= 60 && i.w <= 2.5 * i.t && !i.side)) return 'vier';
+    // Ohne Besäumsäge: scharfkantige Ware nur über Modell-/Prismenschnitt (Breite wird durch die Flächen bestimmt)
+    if (inp.noEdger !== false) return 'prisma';
     const mains = items.filter(i => !i.side);
     const ws = mains.map(i => i.w);
     if (mains.length > 1 && Math.max.apply(null, ws) - Math.min.apply(null, ws) <= 5) return 'prisma';
@@ -343,14 +360,14 @@
     const chk = rEff === r ? sim : simulate(pl.ops, rEff, k);
     pl.ops.forEach((op, i) => {
       if (op.item == null) return;
-      const v = [-op.n[1], op.n[0]], have = extentAlong(chk.res[i].piece, v);
+      const have = minFaceWidth(chk.res[i].piece, op.n, op.d, k, op.t);
       if (have < op.w - 0.5) {
         warn.push({ lvl: 'err', item: op.item, msg: 'Position ' + (op.item + 1) + ' (' + op.t + '×' + op.w + ' mm) passt am Zopfende nicht in den Stamm – dort sind nur ca. ' + Math.floor(have) + ' mm Breite möglich.' });
       }
     });
     if (pl.rest && pl.rest.type === 'main') {
       const b = pl.rest.b, lastN = pl.ops.length ? pl.ops[pl.ops.length - 1].n : [0, 1];
-      const v = [-lastN[1], lastN[0]], have = extentAlong(chk.rest, v);
+      const have = restWidth(chk.rest, lastN);
       if (have < b.w - 0.5 && pl.ops.length) {
         warn.push({ lvl: 'err', item: b.idx, msg: 'Position ' + (b.idx + 1) + ' (' + b.t + '×' + b.w + ' mm) – das letzte Teil passt am Zopfende nicht in den Stamm (nur ca. ' + Math.floor(have) + ' mm Breite).' });
       }
@@ -377,6 +394,13 @@
     });
     if (inp.level === 'C' && g.delta > 10) warn.push({ lvl: 'warn', msg: 'Stamm ist konisch (' + fmt(g.delta / 10, 1) + ' cm Differenz) – ohne Höhenausgleich werden die Bretter am Zopf schmaler/keilig.' });
     if (inp.level === 'B') warn.push({ lvl: 'info', msg: 'Rindenparalleler Schnitt: Zopf wird um den vollen Durchmesserunterschied angehoben. Plan und Grafik gelten für den Zopfquerschnitt.' });
+    if (inp.noEdger !== false) {
+      if (strat === 'scharf') warn.push({ lvl: 'warn', msg: 'Scharfschnitt liefert unbesäumte Ware (Waldkante). Ohne Besäumsäge werden die Bretter auf der Blockbandsäge besäumt (Schritt am Ende) – für Bretter mit fester Breite besser Modell-/4-Seiten-Einschnitt wählen.' });
+      else {
+        const narrow = items.filter(i => !i.side && !i.fill && i.w < pl.Wm - 2);
+        narrow.forEach(i => warn.push({ lvl: 'info', item: i.idx, msg: 'Position ' + (i.idx + 1) + ' (Breite ' + i.w + ') ist schmaler als die Modellbreite ' + fmt(pl.Wm, 0) + ' mm – wird am Ende auf der Säge nachgesägt (Bretter hochkant, ein Schnitt). Am besten alle Hölzer mit gleicher Breite planen.' }));
+      }
+    }
     if (bark > 0 && plan.items.length) warn.push({ lvl: 'info', msg: 'Rindenabzug ' + fmt(bark, 0) + ' mm je Seite: Das Schnittmuster muss in den Holzkörper ohne Rinde passen (' + fmt(2 * rEff, 0) + ' mm nutzbar am Zopf).' });
     if (pfeil > 0) warn.push({ lvl: 'info', msg: 'Krummer Stamm: Nutzdurchmesser am Zopf um ' + fmt(pfeil / 10, 1) + ' cm reduziert gerechnet. Bogen seitlich bzw. nach oben auflegen.' });
 
@@ -526,6 +550,33 @@
       prev = op;
     });
 
+    if (inp.noEdger !== false) {
+      const post = 'Schritt 7 – Nachschnitte auf der Säge';
+      const seen = new Set();
+      ops.forEach(op => {
+        if (op.item == null || op.kind === 'fill' || seen.has(op.item) || !(op.wFull - op.w > 2)) return;
+        seen.add(op.item);
+        const it = plan.items.find(i => i.idx === op.item); if (!it) return;
+        const scharf = plan.strat === 'scharf';
+        push({
+          kind: 'post', phase: post, title: 'Pos. ' + (op.item + 1) + ': ' + it.q + ' Bretter auf ' + op.w + ' mm Breite sägen',
+          sub: scharf ? 'Hochkant: 1. Waldkante ab, wenden, 2. Schnitt auf Skala ' + op.w + ' mm' : 'Hochkant stellen, ein Schnitt auf Skala ' + op.w + ' mm',
+          text: 'Bretter ' + it.t + ' mm dick hochkant auf das Bett stellen (mehrere nebeneinander klemmen). ' + (scharf ? 'Erst eine Waldkante abnehmen, Brett wenden und mit gerader Kante nach unten auf Skala ' + op.w + ' mm (Schnittfuge ' + fmt(plan.k, 1) + ' mm) auf Sollbreite sägen.' : 'Die gerade Kante liegt unten; ein Schnitt bei Skala ' + op.w + ' mm nimmt den Überstand (ca. ' + (op.wFull - op.w) + ' mm) ab.')
+        });
+      });
+      const groups = {};
+      ops.forEach(op => { if (op.kind === 'fill' && op.fillN > 1) { const key = op.t + '|' + op.fillN + '|' + op.fillP; groups[key] = groups[key] || { t: op.t, n: op.fillN, p: op.fillP, boards: 0 }; groups[key].boards++; } });
+      if (plan.rest && plan.rest.type === 'fill' && plan.rest.L.k > 1) { const L = plan.rest.L, key = L.T + '|' + L.k + '|' + L.P; groups[key] = groups[key] || { t: L.T, n: L.k, p: L.P, boards: 0 }; groups[key].boards++; }
+      Object.keys(groups).forEach(key => {
+        const g2 = groups[key], W = g2.n * g2.p + (g2.n - 1) * plan.k, hs = []; let top = W;
+        for (let i = 1; i < g2.n; i++) { top = top - g2.p - plan.k; hs.push(Math.round(top)); }
+        push({
+          kind: 'post', phase: post, title: g2.boards + ' Latten-Bretter (' + g2.t + ' mm) in ' + g2.n + ' Latten ' + g2.p + '×' + g2.t + ' sägen',
+          sub: 'Hochkant (' + fmt(W, 0) + ' mm), Skala ' + hs.join(' → ') + ' mm',
+          text: 'Füllware-Bretter ' + g2.t + ' × ' + fmt(W, 0) + ' mm hochkant auf das Bett stellen (mehrere klemmen), von oben nach unten auf Skala ' + hs.join(', ') + ' mm sägen – ergibt ' + g2.n + ' Latten ' + g2.p + '×' + g2.t + ' mm je Brett.'
+        });
+      });
+    }
     push({
       kind: 'done', phase: 'Fertig', op: ops.length, title: 'Hölzer entnehmen & stapeln',
       sub: 'Einschnitt abgeschlossen', text: 'Bretter und Kanthölzer entnehmen, Reste (Schwarten) entsorgen. Danach Einschnitt zurücksetzen für den nächsten Stamm.'
