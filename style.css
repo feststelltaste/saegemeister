@@ -8,6 +8,7 @@
   --coal: #1d1f21;
   --paper: #F1EEE6;
   --card: #fff;
+  --tickhint: #B5B5B5;
   --field: #fff;
   --btn: #111;
   --shadow: #111;
@@ -33,6 +34,7 @@ html[data-theme="dark"] {
   --fg2: #C3C0B8;
   --paper: #111315;
   --card: #1B1E21;
+  --tickhint: #5A6067;
   --field: #121416;
   --btn: #343A41;
   --shadow: #050505;
@@ -153,8 +155,8 @@ select, .sel { width: 100%; min-height: var(--tap); font-size: 18px; font-weight
 .step.done { background: var(--done); }
 .step.done .st-title { text-decoration: line-through; color: var(--fg2); }
 .step.important .st-main { background: var(--w-bg); }
-.st-main { display: grid; grid-template-columns: 60px 1fr; gap: 10px; padding: 8px; align-items: center; }
-.tick { width: 64px; height: 64px; border: 2px solid var(--line); border-radius: 10px; background: var(--field); font-size: 40px; font-weight: 900; line-height: 1; color: transparent; }
+.st-main { display: grid; grid-template-columns: 48px 1fr; gap: 18px; padding: 8px; align-items: center; }
+.tick { width: 48px; height: 48px; border: 2px solid var(--line); border-radius: 8px; background: var(--field); font-size: 28px; font-weight: 900; line-height: 1; color: var(--tickhint); padding: 0; }
 .step.done .tick { background: var(--ok); border-color: var(--ok); color: #fff; }
 .st-title { font-size: 19px; font-weight: 900; }
 .st-sub { font-size: 15px; font-weight: 700; color: var(--fg2); }
