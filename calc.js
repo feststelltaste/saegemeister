@@ -50,7 +50,7 @@
 
   const DEFAULTS = {
     mode: 'mid', dmid: 40, taper: 1, dtop: 38, dbutt: 42, len: 4,
-    form: 'gerade', pfeil: 2, bark: 10, species: 'fichte', saw: 'duenn', kerf: 2.0,
+    form: 'gerade', pfeil: 2, withBark: false, bark: 10, species: 'fichte', saw: 'duenn', kerf: 2.0,
     strategy: 'auto', level: 'A', alt: false, noEdger: true,
     fill: { on: true, auto: true, t: 30, w: 50, l: 0, wane: 0 },
     schwart: { on: true, t: 24, minW: 60 },
@@ -341,7 +341,7 @@
 
     const r = g.dtop / 2;
     const pfeil = inp.form === 'krumm' ? Math.max(0, num(inp.pfeil, 0)) * 10 : 0;
-    const bark = Math.max(0, num(inp.bark, 0));
+    const bark = inp.withBark ? Math.max(0, num(inp.bark, 0)) : 0;
     const rEff = Math.max(1, (g.dtop - pfeil) / 2 - bark);
     plan.rEff = rEff;
     const alt = !!inp.alt;

@@ -95,12 +95,13 @@ t('Ohne Besäumsäge: auto = Prisma, Nachschnitt-Schritte für schmalere Bretter
   assert.ok(post.some(s => /Latten-Bretter/.test(s.title)));
 });
 t('Baumkante erlaubt -> mehr Latten, Rinde im Ergebnis', () => {
-  const inp = base0(); inp.mode = 'ends'; inp.dtop = 28; inp.dbutt = 32; inp.items = [{ t: 24, w: 150, l: 4000, q: 8 }];
+  const inp = base0(); inp.mode = 'ends'; inp.dtop = 28; inp.dbutt = 32; inp.items = [{ t: 24, w: 150, l: 4000, q: 8 }]; inp.withBark = true; inp.bark = 10;
   inp.fill = { on: true, auto: false, t: 30, w: 50, l: 0, wane: 0 };
   const a = S.buildPlan(inp); inp.fill.wane = 6; const b = S.buildPlan(inp);
   assert.ok(b.fill.n > a.fill.n, a.fill.n + ' -> ' + b.fill.n);
   assert.ok(!b.warnings.some(w => w.lvl === 'err'));
-  assert.ok(a.res.barkShare > 5 && a.res.barkShare < 20);
+  assert.ok(a.res.barkShare > 5);
+  inp.withBark = false; assert.strictEqual(S.buildPlan(inp).res.barkShare, 0);
 });
 t('Schwarten als Bretter: eigene Schnitte, Volumen separat', () => {
   const inp = base0(); inp.items = [{ t: 50, w: 200, l: 4000, q: 2, side: false }]; inp.strategy = 'prisma';

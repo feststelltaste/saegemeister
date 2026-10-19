@@ -13,7 +13,7 @@
 
   /* ---------- Speicherung / Link ---------- */
   function save() {
-    try { localStorage.setItem(KEY, JSON.stringify({ inp, checks, sig })); } catch (e) { /* privater Modus */ }
+    try { localStorage.setItem(KEY, JSON.stringify({ v: 2, inp, checks, sig })); } catch (e) { /* privater Modus */ }
   }
   function load() {
     let st = null;
@@ -106,6 +106,13 @@
   let ui = {};
   function buildStamm() {
     const box = $('#fStamm'); box.innerHTML = '';
+    const bseg = el('div', 'seg');
+    [['Entrindet', false], ['Mit Rinde', true]].forEach(o => {
+      const b = el('button', null, o[0]); b.type = 'button'; b.dataset.wb = o[1] ? '1' : '0';
+      b.addEventListener('click', () => { inp.withBark = o[1]; syncVis(); upd(); });
+      bseg.appendChild(b);
+    });
+    box.appendChild(bseg); ui.bseg = bseg;
     ui.dmid = field(box, inp, 'dmid', { label: 'Mittendurchmesser', unit: 'cm', step: 1, min: 5, max: 200, dec: 1, chips: [20, 30, 40, 50, 60] }, upd);
     ui.taper = field(box, inp, 'taper', { label: 'Abholzigkeit', unit: 'cm/m', step: 0.5, min: 0, max: 10, dec: 1, chips: [0, 0.5, 1, 1.5, 2] }, upd);
     ui.dtop = field(box, inp, 'dtop', { label: 'Zopfdurchmesser (dünnes Ende)', unit: 'cm', step: 1, min: 5, max: 200, dec: 1 }, upd);
@@ -122,6 +129,8 @@
     ui.dmid.wrap.hidden = ui.taper.wrap.hidden = !mid;
     ui.dtop.wrap.hidden = ui.dbutt.wrap.hidden = mid;
     ui.pfeil.wrap.hidden = inp.form !== 'krumm';
+    ui.bark.wrap.hidden = !inp.withBark;
+    ui.bseg.querySelectorAll('button').forEach(b => b.classList.toggle('on', (b.dataset.wb === '1') === !!inp.withBark));
     document.querySelectorAll('#modeSeg button').forEach(b => b.classList.toggle('on', b.dataset.mode === (mid ? 'mid' : 'ends')));
   }
   function buildSaw() {
@@ -281,7 +290,7 @@
     h += '</div>';
     const pk = Math.max(0, r.yield), pf = Math.max(0, r.kerfShare), pb = Math.max(0, r.barkShare), ps = Math.max(0, r.schwartShare), po = Math.max(0, 100 - pk - pf - pb - ps);
     h += '<div class="split" aria-hidden="true"><div style="width:' + pk + '%;background:#0B7A33"></div><div style="width:' + pf + '%;background:#111"></div><div style="width:' + pb + '%;background:#7a5230"></div><div style="width:' + ps + '%;background:#B9AE98"></div><div style="width:' + po + '%;background:#FF5A00"></div></div>';
-    h += '<div class="split-leg"><span>■ Schnittholz ' + fmt(pk, 1) + ' %</span><span>■ Fuge ' + fmt(pf, 1) + ' %</span><span>■ Rinde ' + fmt(pb, 1) + ' %</span><span>■ Schwartenbretter ' + fmt(ps, 1) + ' %</span><span>■ Schwarten/Reste/Besäumen ' + fmt(po, 1) + ' %</span></div>';
+    h += '<div class="split-leg"><span>■ Schnittholz ' + fmt(pk, 1) + ' %</span><span>■ Fuge ' + fmt(pf, 1) + ' %</span>' + (pb > 0.05 ? '<span>■ Rinde ' + fmt(pb, 1) + ' %</span>' : '') + '<span>■ Schwartenbretter ' + fmt(ps, 1) + ' %</span><span>■ Schwarten/Reste/Besäumen ' + fmt(po, 1) + ' %</span></div>';
     const bad = plan.warnings.filter(w => w.lvl === 'err').length;
     h += '<div class="msgs">';
     if (!bad) h += '<div class="msg ok">✓ Plausibilitäts-Check: Muster passt geometrisch (am Zopf) und vom Volumen her in den Stamm.</div>';
